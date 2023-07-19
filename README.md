@@ -1,0 +1,2 @@
+## NimBcs
+This library is nim lang's implementation of the [binary canonical serialization](https://github.com/diem/bcs), it serializes data to hex instead of bytes and it makes extensive use of nim's template feature.

@@ -3,6 +3,9 @@
 #
 #      See the file "LICENSE", included in this
 #    distribution, for details about the copyright.
+##   Emergency int128 and uint128 implementation for the bcs library.
+##   When these ints arrive to nim this module will be modified to accomodate
+##   them or be scraped completly.
 from std / strformat import fmt
 from std / strutils import parseInt
 

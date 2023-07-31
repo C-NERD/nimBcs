@@ -10,90 +10,29 @@ from std / options import Option, none, get, some
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, `[]=`
 #from std / strformat import fmt
 from std / typetraits import genericParams, tupleLen, get
+from std / bitops import bitand, bitor, rotateLeftBits
 
-import constants, int128
+import constants, int128, utils
 
 export fromHex, genericParams, get
 
-template tokenize[T](data : var string, output : var string) : untyped =
+template deSerializeUleb128(data : var string) : untyped =
 
-    when T is CountTable or T is CountTableRef or T is OrderedTable or 
-        T is OrderedTableRef or T is Table or T is TableRef:
-            
-        tokenizeTable[T](data, output)
+    var value, shift = 0'u32
+    while value <= high(uint32):
 
-    elif T is Option:
-        
-        tokenizeOption[T](data, output)
+        let byteVal = strutils.fromHex[byte](data[0..1])
+        data = data[2..^1] ## update data
+        value = bitor(value, rotateLeftBits(bitand(byteVal, 0x7F), shift))
+        if bitand(byteVal, 0x80) == 0:
 
-    elif T is int8 or T is uint8:
+            break
 
-        output = data[0..1]
-        data = data[2..^1]
+        shift.inc(7)
 
-    elif T is int16 or T is uint16:
+    value
 
-        output = data[0..3]
-        data = data[4..^1]
-
-    elif T is int32 or T is uint32:
-
-        output = data[0..7]
-        data = data[8..^1]
-
-    elif T is int64 or T is uint64 or T is int or T is uint:
-
-        output = data[0..15]
-        data = data[16..^1]
-
-    elif T is int128 or T is uint128:
-
-        output = data[0..31]
-        data = data[32..^1]
-
-    elif T is bool:
-
-        output = data[0..1]
-        data = data[2..^1]
-
-    elif T is string:
-
-        let 
-            strLenHex = data[0..15]
-            strHexLen = 15 + (strutils.fromHex[uint64](strLenHex) * 2)
-
-        output = strLenHex & data[16..strHexLen]
-        data = data[(strHexLen + 1)..^1]
-
-    elif T is enum:
-
-        output = data[0..7]
-        data = data[8..^1]
-
-        let 
-            strLenHex = data[0..15]
-            strHexLen = 15 + (strutils.fromHex[uint64](strLenHex) * 2)
-
-        output.add (strLenHex & data[16..strHexLen])
-        data = data[(strHexLen + 1)..^1]
-
-    elif T is seq:
-
-        tokenizeSeq[T](data, output)
-
-    elif T is array:
-
-        tokenizeArray[T](data, output)
-
-    elif T is tuple:
-
-        tokenizeTuple[T](data, output)
-
-    elif T is object or T is ref object:
-        
-        tokenizeObject[T](data, output)
-
-template deSerialize*[T](data : string, output : var T) : untyped =
+template deSerialize*[T](data : var string, output : var T) : untyped =
 
     when T is CountTable or T is CountTableRef or T is OrderedTable or 
         T is OrderedTableRef or T is Table or T is TableRef:
@@ -104,13 +43,85 @@ template deSerialize*[T](data : string, output : var T) : untyped =
 
         output = deSerializeOption[T](data)
 
-    elif T is SomeInteger:
+    elif T is int8 or T is uint8:
 
-        output = strutils.fromHex[T](data)
+        output = strutils.fromHex[T](switchByteOrder(data[0..1]))
+        if len(data) > 2:
+
+            data = data[2..^1]
+
+        else:
+
+            data = ""
+
+    elif T is int16 or T is uint16:
+
+        output = strutils.fromHex[T](switchByteOrder(data[0..3]))
+        if len(data) > 4:
+
+            data = data[4..^1]
+
+        else:
+
+            data = ""
+
+    elif T is int32 or T is uint32:
+
+        output = strutils.fromHex[T](switchByteOrder(data[0..7]))
+        if len(data) > 8:
+            
+            data = data[8..^1]
+
+        else:
+
+            data = ""
+
+    elif T is int64 or T is uint64:
+
+        output = strutils.fromHex[T](switchByteOrder(data[0..15]))
+        if len(data) > 16:
+
+            data = data[16..^1]
+
+        else:
+
+            data = ""
+
+    elif T is int or T is uint:
+
+        when Is64Bit:
+            
+            when T is int:
+
+                var newOutput : int64
+
+            elif T is uint:
+
+                var newOutput : uint64
+
+        else:
+
+            when T is int:
+
+                var newOutput : int32
+
+            elif T is uint:
+
+                var newOutput : uint32
+
+        deSerialize(data, newOutput)
+        output = T(newOutput)
 
     elif T is int128 or T is uint128:
 
-        output = int128.fromHex[T](data)
+        output = int128.fromHex[T](switchByteOrder(data[0..31]))
+        if len(data) > 32:
+
+            data = data[32..^1]
+
+        else:
+
+            data = ""
 
     elif T is bool:
 
@@ -140,185 +151,77 @@ template deSerialize*[T](data : string, output : var T) : untyped =
 
         output = deSerializeObj[T](data)
 
-proc tokenizeSeq*[T : seq](data, output : var string) =
-    
-    output = data[0..15]
-    data = data[16..^1]
-    let seqLen = int(strutils.fromHex[uint64](output))
-    for _ in 1..seqLen:
-            
-        var newOutput : string
-        tokenize[genericParams(typedesc[T]).get(0)](data, newOutput)
+proc deSerializeBool*(data : var string) : bool =
+
+    if data[0..1] == "01":
         
-        output.add newOutput
+        result = true
 
-proc tokenizeArray*[T : array](data, output : var string) =
+    elif data[0..1] == "00":
 
-    let arrayLen = len(T)
-    for _ in 1..arrayLen:
-
-        var newOutput : string
-        tokenize[genericParams(typedesc[T]).get(1)](data, newOutput)
-
-        output.add newOutput
-
-proc tokenizeTuple*[T : tuple](data, output : var string) =
-    
-    #let tupleItems = genericParams(typedesc[T])
-    var testTuple : T
-    for val in fields(testTuple):
-         
-        var newOutput : string
-        tokenize[typeof(val)](data, newOutput)
-
-        output.add newOutput
-
-proc tokenizeObject*[T : object | ref object](data, output : var string) =
-
-    when T is object:
-
-        var iterObj : T ## create variable that can be iterated upon
-
-    elif T is ref object:
-
-        var refIterObj : T
-        new refIterObj
-        var iterObj = refIterObj[]
-
-    for field in fields(iterObj):
-
-        var newOutput : string
-
-        tokenize[typeof(field)](data, newOutput)
-        output.add newOutput
-
-proc tokenizeTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data, output : var string) =
-
-    output = data[0..15]
-    data = data[16..^1]
-    let mapLen = strutils.fromHex[uint64](output)
-    when T is CountTable or T is CountTableRef:
-          
-        for _ in 0..<int(mapLen):
-         
-            var newOutput : string
-            tokenize[genericParams(typedesc[T]).get(0)](data, newOutput)
-            output.add newOutput
-
-            newOutput = ""
-            tokenize[int](data, newOutput)
-            output.add newOutput
+        result = false
 
     else:
 
-        for _ in 0..<int(mapLen):
-
-            var newOutput : string
-            tokenize[genericParams(typedesc[T]).get(0)](data, newOutput)
-            output.add newOutput
-
-            newOutput = ""
-            tokenize[genericParams(typedesc[T]).get(1)](data, newOutput)
-            output.add newOutput
-
-proc tokenizeOption*[T : Option](data, output : var string) =
-
-    output = data[0..1]
-    data = data[2..^1]
-    if output == "00":
-
-        discard ## do noting here. Already did something above
-
-    elif output == "01":
-
-        var newOutput : string
-
-        tokenize[genericParams(typedesc[T]).get(0)](data, newOutput)
-        output.add newOutput
-
-    else:
-
-        raise newException(InvalidBcsStructure, "option type structure is invalid")
-
-proc deSerializeBool*(data : string) : bool =
-
-    if data == "01":
-
-        return true
-
-    elif data == "00":
-
-        return false
-
-proc deSerializeStr*(data : string) : string = 
+        raise newException(InvalidBcsStructure, "bool type structure is invalid")
     
-    let seqLen = strutils.fromHex[uint64](data[0..15])
-    if seqLen > uint64(MAX_SEQ_LENGHT):
+    if len(data) > 2:
+         
+        data = data[2..^1]
 
-        raise newException(InvalidSequenceLength, "string lenght is greater than " & $MAX_SEQ_LENGHT)
-
-    return parseHexStr(data[16..^1])
-
-proc deSerializeEnum*[T : enum](data : string) : T =
-
+proc deSerializeStr*(data : var string) : string = 
+    
     let 
-        enumPos = data[0..7]
-        enumData = data[8..^1]
+        strLen = deSerializeUleb128(data)
+        hexLen = (strLen * 2)
     
-    result = T(strutils.fromHex[uint32](enumPos))
-    if deSerializeStr(enumData) != $result:
+    result = parseHexStr(data[0..hexLen - 1])
+    if uint32(len(data)) > hexLen:
 
+        data = data[hexLen..^1]
+
+    else:
+
+        data = ""
+
+proc deSerializeEnum*[T : enum](data : var string) : T =
+
+    let enumPos = deSerializeUleb128(data)
+    result = T(enumPos)
+    if not (deSerializeStr(data) == $result):
+        
         raise newException(InvalidBcsStructure, "enum type structure is invalid")
 
-proc deSerializeSeq*[T : seq](data : string) : T =
+proc deSerializeSeq*[T : seq](data : var string) : T =
     
-    var 
-        seqLen = strutils.fromHex[uint64](data[0..15])
-        data = data[16..^1]
-
-    if seqLen > uint64(MAX_SEQ_LENGHT):
-
-        raise newException(InvalidSequenceLength, "seq lenght is greater than " & $MAX_SEQ_LENGHT)
-
+    let seqLen = deSerializeUleb128(data)
     for _ in 0..<seqLen:
 
-        var itemBcs : string
-        tokenize[genericParams(typedesc[T]).get(0)](data, itemBcs)
-
         var item : genericParams(typedesc[T]).get(0)
-        deSerialize(itemBcs, item)
+        deSerialize(data, item)
 
         result.add item
 
-proc deSerializeArray*[T : array](data : string) : T =
+proc deSerializeArray*[T : array](data : var string) : T =
     
-    var data = data
     for pos in 0..<len(T):
 
-        var itemBcs : string
-        tokenize[genericParams(typedesc[T]).get(1)](data, itemBcs)
-
         var item : genericParams(typedesc[T]).get(1)
-        deSerialize(itemBcs, item)
+        deSerialize(data, item)
 
         result[pos] = item
 
-proc deSerializeTuple*[T : tuple](data : string) : T =
+proc deSerializeTuple*[T : tuple](data : var string) : T =
     
-    var data = data
     for val in fields(result):
 
-        var itemBcs : string
-        tokenize[typeof(val)](data, itemBcs)
-
         var item : typeof(val)
-        deSerialize(itemBcs, item)
+        deSerialize(data, item)
 
         val = item
 
-proc deSerializeObj*[T : object | ref object](data : string) : T =
+proc deSerializeObj*[T : object | ref object](data : var string) : T =
     
-    var data = data
     when T is ref object:
 
         var refResultSub : T 
@@ -331,10 +234,7 @@ proc deSerializeObj*[T : object | ref object](data : string) : T =
 
     for field in fields(resultSub):
 
-        var itemBcs : string
-        tokenize[typeof(field)](data, itemBcs)
-
-        deSerialize(itemBcs, field)
+        deSerialize(data, field)
     
     when T is ref object:
         
@@ -356,61 +256,52 @@ proc deSerializeObj*[T : object | ref object](data : string) : T =
 
                 value1 = value2
 
-proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data : string) : T =
-
+proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data : var string) : T =
+    
+    let tableLen = deSerializeUleb128(data)
     when T is CountTable or T is CountTableRef:
 
-        let tableLen = strutils.fromHex[uint64](data[0..15])
-        var data = data[16..^1]
         for _ in 0..<tableLen:
 
-            var 
-                itemBcs : string
-                newOutput : string
-            tokenize[genericParams(typedesc[T]).get(0)](data, newOutput)
-            itemBcs.add newOutput
-
-            newOutput = ""
-            tokenize[int](data, newOutput)
-            itemBcs.add newOutput
-
             var item : tuple[key : genericParams(typedesc[T]).get(0), val : int]
-            deSerialize(itemBcs, item)
+            deSerialize(data, item.key)
+            deSerialize(data, item.val)
 
             result[item[0]] = item[1]
 
     else:
-
-        let tableLen = strutils.fromHex[uint64](data[0..15])
-        var data = data[16..^1]
+ 
         for _ in 0..<tableLen:
 
-            var 
-                itemBcs : string
-                newOutput : string
-            tokenize[genericParams(typedesc[T]).get(0)](data, newOutput)
-            itemBcs.add newOutput
-
-            newOutput = ""
-            tokenize[genericParams(typedesc[T]).get(1)](data, newOutput)
-            itemBcs.add newOutput
-
             var item : tuple[key : genericParams(typedesc[T]).get(0), val : genericParams(typedesc[T]).get(1)]
-            deSerialize(itemBcs, item)
+            deSerialize(data, item.key)
+            deSerialize(data, item.val)
 
             result[item[0]] = item[1]
 
-proc deSerializeOption*[T : Option](data : string) : T =
+proc deSerializeOption*[T : Option](data : var string) : T =
 
-    if data == "00":
+    if data[0..1] == "00":
+        
+        if len(data) > 2:
+
+            data = data[2..^1]
+
+        else:
+
+            data = ""
 
         return none[genericParams(typedesc[T]).get(0)]()
 
-    else:
-        
-        if data[0..1] != "01":
+    elif data[0..1] == "01":
 
-            raise newException(InvalidBcsStructure, "option type structure is invalid")
+        if len(data) > 2:
+
+            data = data[2..^1]
+
+        else:
+
+            raise newException(InvalidBcsStructure, "option type is meant to contain data but, no data found")
         
         var optionValue : genericParams(typedesc[T]).get(0)
         when genericParams(typedesc[T]).get(0) is ref object:
@@ -418,5 +309,10 @@ proc deSerializeOption*[T : Option](data : string) : T =
             new(optionValue)
 
         result = some(optionValue)
-        deSerialize(data[2..^1], result.get())
+        deSerialize(data, result.get())
+
+    else:
+
+        raise newException(InvalidBcsStructure, "option type structure is invalid")
+
 

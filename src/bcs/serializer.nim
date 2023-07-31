@@ -4,14 +4,17 @@
 #      See the file "LICENSE", included in this
 #    distribution, for details about the copyright.
 ##
-## known limitations
-## 1. infinite recursion occurs for recursive objects with a ref field of themselves.
+## known limitations ::
+## 1. Infinite recursion occurs for recursive objects with a ref field of themselves.
 ## This is because the bcs format does not account for nil types in ref objects, at
 ## least from the sources I have read. So, if you want to use a recursive type. try using
 ## it in an Option type or don't use it at all. Until there are changes to the bcs structure
-## 2. since this library works by means of string operations, and nim strings are 
+## 2. Since this library works by means of string operations, and nim strings are 
 ## implemented as char bytes. This library cannot differenciate between normal strings and 
 ## hex strings but you can implement one specific for your needs with this library
+## 3 . Because of my understanding on enums in nim, all nim enums are serialized and deserialized as string valued enums.
+## So non string valued enums are not supported. Keep this in mind when interfacing with bcs libraries from
+## other languages
 {.experimental: "codeReordering".}
 
 from std / strutils import toHex
@@ -19,8 +22,9 @@ from std / options import isNone, get, Option
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, len, pairs
 #from std / strformat import fmt
 from std / typetraits import tupleLen
+from std / bitops import bitand, bitor, rotateRightBits
 
-import constants, int128
+import constants, int128, utils
 
 export toHex
 
@@ -39,11 +43,11 @@ template serialize*[T](data : T, output : var string) =
 
     elif T is SomeInteger:
 
-        output = strutils.toHex(data)
+        output = switchByteOrder(strutils.toHex[T](data))
 
     elif T is int128 or T is uint128:
 
-        output = int128.toHex(data)
+        output = switchByteOrder(int128.toHex[T](data))
 
     elif T is bool:
 
@@ -65,6 +69,17 @@ template serialize*[T](data : T, output : var string) =
 
         output = serializeObj(data)
 
+iterator serializeUleb128*(data : uint32) : uint8 =
+    
+    var data = data
+    while data >= 0x80'u32:
+
+        let byteVal = bitand(data, 0x7F)
+        yield uint8(bitor(byteVal, 0x80))
+        data = rotateRightBits(data, 7)
+
+    yield uint8(bitand(data, 0x7F))
+
 proc serializeBool*(data : bool) : string =
 
     if data:
@@ -82,37 +97,37 @@ proc serializeStr*(data : string) : string =
 
         raise newException(InvalidSequenceLength, "string lenght is greater than " & $MAX_SEQ_LENGHT)
 
-    serialize(uint64(dataLen), result)
+    for val in serializeUleb128(uint32(dataLen)):
+
+        serialize(val, result)
+
     result.add toHex(data)
 
 proc serializeEnum*[T : enum](data : T) : string =
 
-    serialize(uint32(ord(data)), result)
+    for val in serializeUleb128(uint32(ord(data))):
+
+        serialize(val, result)
+
     var strOutput : string
     serialize($data, strOutput)
     result.add strOutput
 
 proc serializeArray*(data : array | seq | tuple) : string =
-    ## serializes array, seq and tuple
-    
-    when not(data is tuple):
-
-        let dataLen = len(data)
-
-    else:
-
-        let dataLen = tupleLen(data) ## I don't know why i am defining this
-        ## probably bloatware to be removed in the future
-    
-    when data is seq:
+    ## serializes array, seq or tuple
         
-        if len(data) > int(MAX_SEQ_LENGHT):
-
-            raise newException(InvalidSequenceLength, "seq lenght is greater than " & $MAX_SEQ_LENGHT)
-
-        serialize(uint64(dataLen), result)
-    
     when not(data is tuple):
+
+        when data is seq:
+        
+            let dataLen = len(data)
+            if dataLen > int(MAX_SEQ_LENGHT):
+
+                raise newException(InvalidSequenceLength, "seq lenght is greater than " & $MAX_SEQ_LENGHT)
+
+            for val in serializeUleb128(uint32(dataLen)):
+
+                serialize(val, result)
 
         for item in data:
             
@@ -150,7 +165,10 @@ proc serializeObj*(data : object | ref object) : string =
 
 proc serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : string =
 
-    serialize(uint64(len(data)), result)
+    for val in serializeUleb128(uint32(len(data))):
+
+        serialize(val, result)
+
     for key, value in pairs(data):
         
         var tupleOutput : string

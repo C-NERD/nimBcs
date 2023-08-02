@@ -8,7 +8,6 @@
 from std / strutils import parseHexStr, fromHex
 from std / options import Option, none, get, some
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, `[]=`
-#from std / strformat import fmt
 from std / typetraits import genericParams, tupleLen, get
 from std / bitops import bitand, bitor, rotateLeftBits
 
@@ -16,7 +15,7 @@ import constants, int128, utils
 
 export fromHex, genericParams, get
 
-template deSerializeUleb128(data : var string) : untyped =
+template deSerializeUleb128*(data : var string) : untyped =
 
     var value, shift = 0'u32
     while value <= high(uint32):

@@ -5,14 +5,17 @@
 #    distribution, for details about the copyright.
 ##
 ## known limitations ::
+##
 ## 1. Infinite recursion occurs for recursive objects with a ref field of themselves.
 ## This is because the bcs format does not account for nil types in ref objects, at
 ## least from the sources I have read. So, if you want to use a recursive type. try using
 ## it in an Option type or don't use it at all. Until there are changes to the bcs structure
+##
 ## 2. Since this library works by means of string operations, and nim strings are 
 ## implemented as char bytes. This library cannot differenciate between normal strings and 
 ## hex strings but you can implement one specific for your needs with this library
-## 3 . Because of my understanding on enums in nim, all nim enums are serialized and deserialized as string valued enums.
+##
+## 3. Because of my understanding on enums in nim, all nim enums are serialized and deserialized as string valued enums.
 ## So non string valued enums are not supported. Keep this in mind when interfacing with bcs libraries from
 ## other languages
 {.experimental: "codeReordering".}
@@ -20,7 +23,6 @@
 from std / strutils import toHex
 from std / options import isNone, get, Option
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, len, pairs
-#from std / strformat import fmt
 from std / typetraits import tupleLen
 from std / bitops import bitand, bitor, rotateRightBits
 

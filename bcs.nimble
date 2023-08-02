@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.1.0"
+version       = "0.1.5"
 author        = "cnerd"
 description   = "nim implementation of bcs serialization format"
 license       = "MIT"

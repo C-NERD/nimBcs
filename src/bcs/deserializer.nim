@@ -194,20 +194,18 @@ proc deSerializeEnum*[T : enum](data : var string) : T =
 proc deSerializeSeq*[T : seq](data : var string) : T =
     
     let seqLen = deSerializeUleb128(data)
+    var item : genericParams(typedesc[T]).get(0)
     for _ in 0..<seqLen:
 
-        var item : genericParams(typedesc[T]).get(0)
         deSerialize(data, item)
-
         result.add item
 
 proc deSerializeArray*[T : array](data : var string) : T =
     
+    var item : genericParams(typedesc[T]).get(1)
     for pos in 0..<len(T):
 
-        var item : genericParams(typedesc[T]).get(1)
         deSerialize(data, item)
-
         result[pos] = item
 
 proc deSerializeTuple*[T : tuple](data : var string) : T =
@@ -259,20 +257,20 @@ proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | Order
     
     let tableLen = deSerializeUleb128(data)
     when T is CountTable or T is CountTableRef:
-
+        
+        var item : tuple[key : genericParams(typedesc[T]).get(0), val : int]
         for _ in 0..<tableLen:
 
-            var item : tuple[key : genericParams(typedesc[T]).get(0), val : int]
             deSerialize(data, item.key)
             deSerialize(data, item.val)
 
             result[item[0]] = item[1]
 
     else:
- 
+        
+        var item : tuple[key : genericParams(typedesc[T]).get(0), val : genericParams(typedesc[T]).get(1)]
         for _ in 0..<tableLen:
 
-            var item : tuple[key : genericParams(typedesc[T]).get(0), val : genericParams(typedesc[T]).get(1)]
             deSerialize(data, item.key)
             deSerialize(data, item.val)
 

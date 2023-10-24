@@ -98,18 +98,22 @@ proc serializeStr*(data : string) : string =
     if dataLen > int(MAX_SEQ_LENGHT):
 
         raise newException(InvalidSequenceLength, "string lenght is greater than " & $MAX_SEQ_LENGHT)
-
+    
+    var serData : string
     for val in serializeUleb128(uint32(dataLen)):
 
-        serialize(val, result)
+        serialize(val, serData)
+        result.add serData
 
     result.add toHex(data)
 
 proc serializeEnum*[T : enum](data : T) : string =
-
+    
+    var serData : string
     for val in serializeUleb128(uint32(ord(data))):
 
-        serialize(val, result)
+        serialize(val, serData)
+        result.add serData
 
     var strOutput : string
     serialize($data, strOutput)
@@ -126,25 +130,25 @@ proc serializeArray*(data : array | seq | tuple) : string =
             if dataLen > int(MAX_SEQ_LENGHT):
 
                 raise newException(InvalidSequenceLength, "seq lenght is greater than " & $MAX_SEQ_LENGHT)
-
-            for val in serializeUleb128(uint32(dataLen)):
-
-                serialize(val, result)
-
-        for item in data:
             
             var serData : string
-            serialize(item, serData)
+            for val in serializeUleb128(uint32(dataLen)):
 
-            result.add serData
+                serialize(val, serData)
+                result.add serData
+        
+        var serData2 : string
+        for item in data:
+            
+            serialize(item, serData2)
+            result.add serData2
 
     else:
-
+        
+        var serData : string
         for field in fields(data):
 
-            var serData : string
             serialize(field, serData)
-
             result.add serData
 
 proc serializeObj*(data : object | ref object) : string =
@@ -157,25 +161,25 @@ proc serializeObj*(data : object | ref object) : string =
             new(refData)
 
         let data = refData[]
-
+    
+    var serData : string
     for field in fields(data):
 
-        var serData : string
         serialize(field, serData)
-
         result.add serData
 
 proc serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : string =
-
+    
+    var serData : string
     for val in serializeUleb128(uint32(len(data))):
 
-        serialize(val, result)
-
+        serialize(val, serData)
+        result.add serData
+    
+    var tupleOutput : string
     for key, value in pairs(data):
         
-        var tupleOutput : string
         serialize((key, value), tupleOutput)
-
         result.add tupleOutput
 
 proc serializeOption*[T](data : Option[T]) : string =

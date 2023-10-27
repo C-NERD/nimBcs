@@ -26,6 +26,14 @@ when not defined(js):
 
     template `int`(data : Integer) : untyped = parseInt($data)
 
+    proc `<=`*(x, y : int128 | uint128) : bool =
+
+        x.value <= y.value
+
+    proc `<`*(x, y : int128 | uint128) : bool =
+
+        x.value < y.value
+
 else:
 
     import std / jsbigints
@@ -52,6 +60,14 @@ else:
                 rData.add item
 
         rData
+
+    proc `<=`*(x, y : int128 | uint128) : bool =
+
+        x.value <= y.value
+
+    proc `<`*(x, y : int128 | uint128) : bool =
+
+        x.value < y.value
 
 const HexChars = "0123456789ABCDEF"
 converter `$`*(data : int128) : string = 
@@ -315,6 +331,10 @@ proc fromHex*[T : int128 | uint128](data : string) : T =
                 if intValue < (0'i128).value:
 
                     result.value = intValue
+
+#[proc `int128`*(data : SomeInteger) : int128 = newInt128($data)
+
+proc `uint128`*(data : SomeUnsignedInt) : uint128 = newUInt128($data)]#
 
 when isMainModule:
 

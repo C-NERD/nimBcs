@@ -10,17 +10,27 @@ from std / options import Option, none, get, some
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, `[]=`
 from std / typetraits import genericParams, tupleLen, get
 from std / bitops import bitand, bitor, rotateLeftBits
+from std / strformat import fmt
 
-import constants, int128, utils
+import constants, largeints, hex
 
 export fromHex, genericParams, get
 
-template deSerializeUleb128*(data : var string) : untyped =
+const Is64Bit* : bool = block:
+
+    var is64 : bool = false
+    if high(int) == high(int64):
+
+        is64 = true
+
+    is64
+
+template deSerializeUleb128*(data : var HexString) : untyped =
 
     var value, shift = 0'u32
     while value <= high(uint32):
 
-        let byteVal = strutils.fromHex[byte](data[0..1])
+        let byteVal = strutils.fromHex[byte]($(data[0..1]))
         data = data[2..^1] ## update data
         value = bitor(value, rotateLeftBits(bitand(byteVal, 0x7F), shift))
         if bitand(byteVal, 0x80) == 0:
@@ -31,7 +41,7 @@ template deSerializeUleb128*(data : var string) : untyped =
 
     value
 
-template deSerialize*[T](data : var string, output : var T) : untyped =
+template deSerialize*[T : Serializables](data : var HexString, output : var T) : untyped =
 
     when T is CountTable or T is CountTableRef or T is OrderedTable or 
         T is OrderedTableRef or T is Table or T is TableRef:
@@ -51,7 +61,7 @@ template deSerialize*[T](data : var string, output : var T) : untyped =
 
         else:
 
-            data = ""
+            data = fromString("")
 
     elif T is int16 or T is uint16:
 
@@ -62,29 +72,29 @@ template deSerialize*[T](data : var string, output : var T) : untyped =
 
         else:
 
-            data = ""
+            data = fromString("")
 
     elif T is int32 or T is uint32:
 
-        output = strutils.fromHex[T](switchByteOrder(data[0..7]))
+        output = strutils.fromHex[T]($switchByteOrder(data[0..7]))
         if len(data) > 8:
             
             data = data[8..^1]
 
         else:
 
-            data = ""
+            data = fromString("")
 
     elif T is int64 or T is uint64:
 
-        output = strutils.fromHex[T](switchByteOrder(data[0..15]))
+        output = strutils.fromHex[T]($switchByteOrder(data[0..15]))
         if len(data) > 16:
 
             data = data[16..^1]
 
         else:
 
-            data = ""
+            data = fromString("")
 
     elif T is int or T is uint:
 
@@ -113,14 +123,25 @@ template deSerialize*[T](data : var string, output : var T) : untyped =
 
     elif T is int128 or T is uint128:
 
-        output = int128.fromHex[T](switchByteOrder(data[0..31]))
+        output = largeints.fromHex[T](switchByteOrder(data[0..31]))
         if len(data) > 32:
 
             data = data[32..^1]
 
         else:
 
-            data = ""
+            data = fromString("")
+
+    elif T is int256 or T is uint256:
+
+        output = largeints.fromHex[T](switchByteOrder(data[0..63]))
+        if len(data) > 64:
+
+            data = data[64..^1]
+
+        else:
+
+            data = fromString("")
 
     elif T is bool:
 
@@ -146,17 +167,17 @@ template deSerialize*[T](data : var string, output : var T) : untyped =
 
         output = deSerializeTuple[T](data)
 
-    elif T is object or T is ref object:
+    else:
 
-        output = deSerializeObj[T](data)
+        {.error : $T & " is not supported".}
 
-proc deSerializeBool*(data : var string) : bool =
+proc deSerializeBool*(data : var HexString) : bool =
 
-    if data[0..1] == "01":
+    if $(data[0..1]) == "01":
         
         result = true
 
-    elif data[0..1] == "00":
+    elif $(data[0..1]) == "00":
 
         result = false
 
@@ -168,22 +189,22 @@ proc deSerializeBool*(data : var string) : bool =
          
         data = data[2..^1]
 
-proc deSerializeStr*(data : var string) : string = 
+proc deSerializeStr*(data : var HexString) : string = 
     
     let 
         strLen = deSerializeUleb128(data)
         hexLen = (strLen * 2)
     
-    result = parseHexStr(data[0..hexLen - 1])
+    result = parseHexStr($(data[0..hexLen - 1]))
     if uint32(len(data)) > hexLen:
 
         data = data[hexLen..^1]
 
     else:
 
-        data = ""
+        data = fromString("")
 
-proc deSerializeEnum*[T : enum](data : var string) : T =
+proc deSerializeEnum*[T : enum](data : var HexString) : T =
 
     let enumPos = deSerializeUleb128(data)
     result = T(enumPos)
@@ -191,7 +212,7 @@ proc deSerializeEnum*[T : enum](data : var string) : T =
         
         raise newException(InvalidBcsStructure, "enum type structure is invalid")
 
-proc deSerializeSeq*[T : seq](data : var string) : T =
+proc deSerializeSeq*[T : seq](data : var HexString) : T =
     
     let seqLen = deSerializeUleb128(data)
     var item : genericParams(typedesc[T]).get(0)
@@ -200,7 +221,7 @@ proc deSerializeSeq*[T : seq](data : var string) : T =
         deSerialize(data, item)
         result.add item
 
-proc deSerializeArray*[T : array](data : var string) : T =
+proc deSerializeArray*[T : array](data : var HexString) : T =
     
     var item : genericParams(typedesc[T]).get(1)
     for pos in 0..<len(T):
@@ -208,7 +229,7 @@ proc deSerializeArray*[T : array](data : var string) : T =
         deSerialize(data, item)
         result[pos] = item
 
-proc deSerializeTuple*[T : tuple](data : var string) : T =
+proc deSerializeTuple*[T : tuple](data : var HexString) : T =
     
     for val in fields(result):
 
@@ -217,43 +238,7 @@ proc deSerializeTuple*[T : tuple](data : var string) : T =
 
         val = item
 
-proc deSerializeObj*[T : object | ref object](data : var string) : T =
-    
-    when T is ref object:
-
-        var refResultSub : T 
-        new(refResultSub)
-        var resultSub = refResultSub[]
-
-    elif T is object:
-
-        var resultSub : T
-
-    for field in fields(resultSub):
-
-        deSerialize(data, field)
-    
-    when T is ref object:
-        
-        refResultSub[] = resultSub
-        return refResultSub
-
-    else:
-        
-        result = resultSub
-        for key, value1, value2 in fieldPairs(result, resultSub):
-            ## NOTE :: This implementation is because of a bug that occurs when
-            ## resultSub is copied to result. This bug converts the value of any int128
-            ## and uint128 type to 0. This bug is only found for object types and not
-            ## ref object types.
-            ## So until this is fixed avoid using int128 and uint128 types in nested seq,
-            ## array or object inside of a larger object to be deserialized
-
-            when value1 is int128.int128 or value1 is uint128:
-
-                value1 = value2
-
-proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data : var string) : T =
+proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data : var HexString) : T =
     
     let tableLen = deSerializeUleb128(data)
     when T is CountTable or T is CountTableRef:
@@ -276,9 +261,9 @@ proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | Order
 
             result[item[0]] = item[1]
 
-proc deSerializeOption*[T : Option](data : var string) : T =
+proc deSerializeOption*[T : Option](data : var HexString) : T =
 
-    if data[0..1] == "00":
+    if $data[0..1] == "00":
         
         if len(data) > 2:
 
@@ -286,11 +271,11 @@ proc deSerializeOption*[T : Option](data : var string) : T =
 
         else:
 
-            data = ""
+            data = fromString("")
 
         return none[genericParams(typedesc[T]).get(0)]()
 
-    elif data[0..1] == "01":
+    elif $data[0..1] == "01":
 
         if len(data) > 2:
 
@@ -311,5 +296,4 @@ proc deSerializeOption*[T : Option](data : var string) : T =
     else:
 
         raise newException(InvalidBcsStructure, "option type structure is invalid")
-
 

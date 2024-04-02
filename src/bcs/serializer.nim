@@ -6,16 +6,7 @@
 ##
 ## known limitations ::
 ##
-## 1. Infinite recursion occurs for recursive objects with a ref field of themselves.
-## This is because the bcs format does not account for nil types in ref objects, at
-## least from the sources I have read. So, if you want to use a recursive type. try using
-## it in an Option type or don't use it at all. Until there are changes to the bcs structure
-##
-## 2. Since this library works by means of string operations, and nim strings are 
-## implemented as char bytes. This library cannot differenciate between normal strings and 
-## hex strings but you can implement one specific for your needs with this library
-##
-## 3. Because of my understanding on enums in nim, all nim enums are serialized and deserialized as string valued enums.
+## 1. Because of my understanding on enums in nim, all nim enums are serialized and deserialized as string valued enums.
 ## So non string valued enums are not supported. Keep this in mind when interfacing with bcs libraries from
 ## other languages
 {.experimental: "codeReordering".}
@@ -26,11 +17,11 @@ from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRe
 from std / typetraits import tupleLen
 from std / bitops import bitand, bitor, rotateRightBits
 
-import constants, int128, utils
+import constants, largeints, hex
 
 export toHex
 
-template serialize*[T](data : T, output : var string) =
+template serialize*[T](data : T, output : var HexString) =
     
     ## non native types are first so the conditions containing
     ## their native counterparts will be avoided
@@ -47,9 +38,9 @@ template serialize*[T](data : T, output : var string) =
 
         output = switchByteOrder(strutils.toHex[T](data))
 
-    elif T is int128 or T is uint128:
+    elif T is int128 or T is uint128 or T is int256 or T is uint256:
 
-        output = switchByteOrder(int128.toHex[T](data))
+        output = switchByteOrder(largeints.toHex[T](data))
 
     elif T is bool:
 
@@ -67,9 +58,9 @@ template serialize*[T](data : T, output : var string) =
 
         output = serializeArray(data)
 
-    elif T is object or T is ref object:
+    else:
 
-        output = serializeObj(data)
+        {.error : $T & " is not supported".}
 
 iterator serializeUleb128*(data : uint32) : uint8 =
     
@@ -82,24 +73,24 @@ iterator serializeUleb128*(data : uint32) : uint8 =
 
     yield uint8(bitand(data, 0x7F))
 
-proc serializeBool*(data : bool) : string =
+proc serializeBool*(data : bool) : HexString =
 
     if data:
 
-        return "01"
+        return fromString("01")
 
     else:
 
-        return "00"
+        return fromString("00")
 
-proc serializeStr*(data : string) : string =
+proc serializeStr*(data : string) : HexString =
     
     let dataLen = len(data)
     if dataLen > int(MAX_SEQ_LENGHT):
 
         raise newException(InvalidSequenceLength, "string lenght is greater than " & $MAX_SEQ_LENGHT)
     
-    var serData : string
+    var serData : HexString
     for val in serializeUleb128(uint32(dataLen)):
 
         serialize(val, serData)
@@ -107,19 +98,19 @@ proc serializeStr*(data : string) : string =
 
     result.add toHex(data)
 
-proc serializeEnum*[T : enum](data : T) : string =
+proc serializeEnum*[T : enum](data : T) : HexString =
     
-    var serData : string
+    var serData : HexString
     for val in serializeUleb128(uint32(ord(data))):
 
         serialize(val, serData)
         result.add serData
 
-    var strOutput : string
-    serialize($data, strOutput)
+    var strOutput : HexString
+    serialize($data, strOutput) ## serialize as string enum
     result.add strOutput
 
-proc serializeArray*(data : array | seq | tuple) : string =
+proc serializeArray*(data : array | seq | tuple) : HexString =
     ## serializes array, seq or tuple
         
     when not(data is tuple):
@@ -131,13 +122,13 @@ proc serializeArray*(data : array | seq | tuple) : string =
 
                 raise newException(InvalidSequenceLength, "seq lenght is greater than " & $MAX_SEQ_LENGHT)
             
-            var serData : string
+            var serData : HexString
             for val in serializeUleb128(uint32(dataLen)):
 
                 serialize(val, serData)
                 result.add serData
         
-        var serData2 : string
+        var serData2 : HexString
         for item in data:
             
             serialize(item, serData2)
@@ -145,53 +136,36 @@ proc serializeArray*(data : array | seq | tuple) : string =
 
     else:
         
-        var serData : string
+        var serData : HexString
         for field in fields(data):
 
             serialize(field, serData)
             result.add serData
 
-proc serializeObj*(data : object | ref object) : string =
-
-    when data is ref object:
-        
-        var refData = data
-        if refData.isNil():
-            
-            new(refData)
-
-        let data = refData[]
+proc serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : HexString =
     
-    var serData : string
-    for field in fields(data):
-
-        serialize(field, serData)
-        result.add serData
-
-proc serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : string =
-    
-    var serData : string
+    var serData : HexString
     for val in serializeUleb128(uint32(len(data))):
 
         serialize(val, serData)
         result.add serData
     
-    var tupleOutput : string
+    var tupleOutput : HexString
     for key, value in pairs(data):
         
         serialize((key, value), tupleOutput)
         result.add tupleOutput
 
-proc serializeOption*[T](data : Option[T]) : string =
+proc serializeOption*[T](data : Option[T]) : HexString =
 
     if data.isNone:
 
-        return "00"
+        return fromString("00")
 
     else:
         
-        var serData : string
+        var serData : HexString
         serialize(data.get(), serData)
 
-        return "01" & serData
+        return fromString("01" & $serData)
 

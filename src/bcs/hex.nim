@@ -1,3 +1,5 @@
+from std / strutils import fromHex, removePrefix
+
 type 
     HexString* = distinct string
 
@@ -8,6 +10,10 @@ proc `$`*(x : HexString) : string {. borrow .}
 proc len*(x : HexString) : int {. borrow .}
 
 proc add*(x : var HexString, y : HexString) {. borrow .}
+
+func fromHex[T : SomeInteger](data : HexString) : T = fromHex[T]($data)
+
+func removePrefix(s : var HexString, y : string) {. borrow .}
 
 proc `[]`*[T, U: Ordinal](s: HexString; x: HSlice[T, U]): HexString =
 
@@ -27,16 +33,22 @@ template isValidHex(data : HexString) : untyped =
 
 converter fromString*(data : string) : HexString =
     
-    let data = HexString(data)
+    var data = HexString(data)
+    removePrefix(data, "0x")
     if not isValidHex(data):
 
         raise newException(InvalidHex, "Invalid hex data")
 
     return data
 
-proc toBytes*(data : HexString) : seq[byte] =
-
-    discard
+converter toBytes*(data : HexString) : seq[byte] =
+    
+    ## checks are done when converting string to HexString
+    ## so no need for checks
+    for pos in countup(0, len(data) - 1, 2):
+        
+        let oneByte = data[pos..(pos + 1)]
+        result.add fromHex[byte](oneByte)
 
 func switchByteOrder*(data : HexString) : HexString =
     ## switches hex byte order from 'little' to 'big'
@@ -46,3 +58,4 @@ func switchByteOrder*(data : HexString) : HexString =
     for pos in countdown(len(data) - 1, 0, 2):
 
         result.add data[pos - 1..pos]
+

@@ -21,8 +21,9 @@ import constants, largeints, hex
 
 export toHex
 
-template serialize*[T](data : T, output : var HexString) =
+template serialize*[T](data : T) : untyped =
     
+    var output : HexString
     ## non native types are first so the conditions containing
     ## their native counterparts will be avoided
     when T is CountTable or T is CountTableRef or T is OrderedTable or 
@@ -62,6 +63,8 @@ template serialize*[T](data : T, output : var HexString) =
 
         {.error : $T & " is not supported".}
 
+    output
+
 iterator serializeUleb128*(data : uint32) : uint8 =
     
     var data = data
@@ -90,25 +93,19 @@ proc serializeStr*(data : string) : HexString =
 
         raise newException(InvalidSequenceLength, "string lenght is greater than " & $MAX_SEQ_LENGHT)
     
-    var serData : HexString
     for val in serializeUleb128(uint32(dataLen)):
 
-        serialize(val, serData)
-        result.add serData
+        result.add serialize(val)
 
     result.add toHex(data)
 
 proc serializeEnum*[T : enum](data : T) : HexString =
     
-    var serData : HexString
     for val in serializeUleb128(uint32(ord(data))):
 
-        serialize(val, serData)
-        result.add serData
+        result.add serialize(val)
 
-    var strOutput : HexString
-    serialize($data, strOutput) ## serialize as string enum
-    result.add strOutput
+    result.add serialize($data) ## serialize as string enum
 
 proc serializeArray*(data : array | seq | tuple) : HexString =
     ## serializes array, seq or tuple
@@ -121,40 +118,30 @@ proc serializeArray*(data : array | seq | tuple) : HexString =
             if dataLen > int(MAX_SEQ_LENGHT):
 
                 raise newException(InvalidSequenceLength, "seq lenght is greater than " & $MAX_SEQ_LENGHT)
-            
-            var serData : HexString
+
             for val in serializeUleb128(uint32(dataLen)):
 
-                serialize(val, serData)
-                result.add serData
+                result.add serialize(val)
         
-        var serData2 : HexString
         for item in data:
             
-            serialize(item, serData2)
-            result.add serData2
+            result.add serialize(item)
 
     else:
         
-        var serData : HexString
         for field in fields(data):
 
-            serialize(field, serData)
-            result.add serData
+            result.add serialize(field)
 
 proc serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : HexString =
     
-    var serData : HexString
     for val in serializeUleb128(uint32(len(data))):
 
-        serialize(val, serData)
-        result.add serData
+        result.add serialize(val)
     
-    var tupleOutput : HexString
     for key, value in pairs(data):
         
-        serialize((key, value), tupleOutput)
-        result.add tupleOutput
+        result.add serialize((key, value))
 
 proc serializeOption*[T](data : Option[T]) : HexString =
 
@@ -164,8 +151,6 @@ proc serializeOption*[T](data : Option[T]) : HexString =
 
     else:
         
-        var serData : HexString
-        serialize(data.get(), serData)
-
-        return fromString("01" & $serData)
+        result = serialize(data.get())
+        result = fromString("01" & $result)
 

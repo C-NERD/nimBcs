@@ -10,7 +10,6 @@ from std / options import Option, none, get, some
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, `[]=`
 from std / typetraits import genericParams, tupleLen, get
 from std / bitops import bitand, bitor, rotateLeftBits
-from std / strformat import fmt
 
 import constants, largeints, hex
 
@@ -41,20 +40,20 @@ template deSerializeUleb128*(data : var HexString) : untyped =
 
     value
 
-template deSerialize*[T : Serializables](data : var HexString, output : var T) : untyped =
-
+template deSerialize*[T](data : var HexString) : untyped =
+    
     when T is CountTable or T is CountTableRef or T is OrderedTable or 
         T is OrderedTableRef or T is Table or T is TableRef:
 
-        output = deSerializeHashTable[T](data)
+        deSerializeHashTable[T](data)
 
     elif T is Option:
 
-        output = deSerializeOption[T](data)
+        deSerializeOption[T](data)
 
     elif T is int8 or T is uint8:
 
-        output = strutils.fromHex[T](switchByteOrder(data[0..1]))
+        var output = strutils.fromHex[T](switchByteOrder(data[0..1]))
         if len(data) > 2:
 
             data = data[2..^1]
@@ -63,9 +62,11 @@ template deSerialize*[T : Serializables](data : var HexString, output : var T) :
 
             data = fromString("")
 
+        output
+
     elif T is int16 or T is uint16:
 
-        output = strutils.fromHex[T](switchByteOrder(data[0..3]))
+        var output = strutils.fromHex[T](switchByteOrder(data[0..3]))
         if len(data) > 4:
 
             data = data[4..^1]
@@ -74,9 +75,11 @@ template deSerialize*[T : Serializables](data : var HexString, output : var T) :
 
             data = fromString("")
 
+        output
+
     elif T is int32 or T is uint32:
 
-        output = strutils.fromHex[T]($switchByteOrder(data[0..7]))
+        var output = strutils.fromHex[T]($switchByteOrder(data[0..7]))
         if len(data) > 8:
             
             data = data[8..^1]
@@ -85,9 +88,11 @@ template deSerialize*[T : Serializables](data : var HexString, output : var T) :
 
             data = fromString("")
 
+        output
+
     elif T is int64 or T is uint64:
 
-        output = strutils.fromHex[T]($switchByteOrder(data[0..15]))
+        var output = strutils.fromHex[T]($switchByteOrder(data[0..15]))
         if len(data) > 16:
 
             data = data[16..^1]
@@ -96,34 +101,33 @@ template deSerialize*[T : Serializables](data : var HexString, output : var T) :
 
             data = fromString("")
 
+        output
+
     elif T is int or T is uint:
 
         when Is64Bit:
             
             when T is int:
 
-                var newOutput : int64
+                int(deSerialize[int64](data))
 
             elif T is uint:
 
-                var newOutput : uint64
+                uint(deSerialize[uint64](data))
 
         else:
 
             when T is int:
 
-                var newOutput : int32
+                int(deSerialize[int32](data))
 
             elif T is uint:
 
-                var newOutput : uint32
-
-        deSerialize(data, newOutput)
-        output = T(newOutput)
+                uint(deSerialize[uint32](data))
 
     elif T is int128 or T is uint128:
 
-        output = largeints.fromHex[T](switchByteOrder(data[0..31]))
+        var output = largeints.fromHex[T](switchByteOrder(data[0..31]))
         if len(data) > 32:
 
             data = data[32..^1]
@@ -132,9 +136,11 @@ template deSerialize*[T : Serializables](data : var HexString, output : var T) :
 
             data = fromString("")
 
+        output
+
     elif T is int256 or T is uint256:
 
-        output = largeints.fromHex[T](switchByteOrder(data[0..63]))
+        var output = largeints.fromHex[T](switchByteOrder(data[0..63]))
         if len(data) > 64:
 
             data = data[64..^1]
@@ -143,29 +149,31 @@ template deSerialize*[T : Serializables](data : var HexString, output : var T) :
 
             data = fromString("")
 
+        output
+
     elif T is bool:
 
-        output = deSerializeBool(data)
+        deSerializeBool(data)
 
     elif T is string:
 
-        output = deSerializeStr(data)
+        deSerializeStr(data)
 
     elif T is enum:
 
-        output = deSerializeEnum[T](data)
+        deSerializeEnum[T](data)
 
     elif T is seq: 
 
-        output = deSerializeSeq[T](data)
+        deSerializeSeq[T](data)
 
     elif T is array:
 
-        output = deSerializeArray[T](data)
+        deSerializeArray[T](data)
 
     elif T is tuple:
 
-        output = deSerializeTuple[T](data)
+        deSerializeTuple[T](data)
 
     else:
 
@@ -215,51 +223,42 @@ proc deSerializeEnum*[T : enum](data : var HexString) : T =
 proc deSerializeSeq*[T : seq](data : var HexString) : T =
     
     let seqLen = deSerializeUleb128(data)
-    var item : genericParams(typedesc[T]).get(0)
     for _ in 0..<seqLen:
 
-        deSerialize(data, item)
-        result.add item
+        result.add deSerialize[genericParams(typedesc[T]).get(0)](data)
 
 proc deSerializeArray*[T : array](data : var HexString) : T =
     
-    var item : genericParams(typedesc[T]).get(1)
     for pos in 0..<len(T):
 
-        deSerialize(data, item)
-        result[pos] = item
+        result[pos] = deSerialize[genericParams(typedesc[T]).get(1)](data)
 
 proc deSerializeTuple*[T : tuple](data : var HexString) : T =
     
     for val in fields(result):
 
-        var item : typeof(val)
-        deSerialize(data, item)
-
-        val = item
+        val = deSerialize[typeof(val)](data)
 
 proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data : var HexString) : T =
     
     let tableLen = deSerializeUleb128(data)
     when T is CountTable or T is CountTableRef:
         
-        var item : tuple[key : genericParams(typedesc[T]).get(0), val : int]
         for _ in 0..<tableLen:
 
-            deSerialize(data, item.key)
-            deSerialize(data, item.val)
+            let key = deSerialize[genericParams(typedesc[T]).get(0)](data)
+            let val = deSerialize[int](data)
 
-            result[item[0]] = item[1]
+            result[key] = val
 
     else:
         
-        var item : tuple[key : genericParams(typedesc[T]).get(0), val : genericParams(typedesc[T]).get(1)]
         for _ in 0..<tableLen:
 
-            deSerialize(data, item.key)
-            deSerialize(data, item.val)
+            let key = deSerialize[genericParams(typedesc[T]).get(0)](data)
+            let val = deSerialize[genericParams(typedesc[T]).get(1)](data)
 
-            result[item[0]] = item[1]
+            result[key] = val
 
 proc deSerializeOption*[T : Option](data : var HexString) : T =
 
@@ -289,9 +288,9 @@ proc deSerializeOption*[T : Option](data : var HexString) : T =
         when genericParams(typedesc[T]).get(0) is ref object:
 
             new(optionValue)
-
+        
+        optionValue = deSerialize[typeof(optionValue)](data)
         result = some(optionValue)
-        deSerialize(data, result.get())
 
     else:
 

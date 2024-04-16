@@ -360,7 +360,7 @@ template `'i256`*(data : string) : untyped = newInt256(data)
 
 template `'u256`*(data : string) : untyped = newUInt256(data)
 
-proc toHex*(data : int128) : HexString =
+proc toHex*(data : int128) : string =
     
     var data = data.value
     if data == (0'i128).value:
@@ -384,9 +384,9 @@ proc toHex*(data : int128) : HexString =
         data = data div (16'i128).value
     
     resultHex2 = pad128Hex(resultHex2)
-    return fromString(resultHex2)
+    return resultHex2
 
-proc toHex*(data : uint128) : HexString =
+proc toHex*(data : uint128) : string =
     
     var data = data.value
     if data == (0'u128).value:
@@ -405,9 +405,9 @@ proc toHex*(data : uint128) : HexString =
         data = data div (16'u128).value
     
     resultHex2 = pad128Hex(resultHex2)
-    return fromString(resultHex2)
+    return resultHex2
 
-proc toHex*(data : int256) : HexString =
+proc toHex*(data : int256) : string =
     
     var data = data.value
     if data == (0'i256).value:
@@ -431,9 +431,9 @@ proc toHex*(data : int256) : HexString =
         data = data div (16'i256).value
     
     resultHex2 = pad256Hex(resultHex2)
-    return fromString(resultHex2)
+    return resultHex2
 
-proc toHex*(data : uint256) : HexString =
+proc toHex*(data : uint256) : string =
     
     var data = data.value
     if data == (0'u256).value:
@@ -452,13 +452,13 @@ proc toHex*(data : uint256) : HexString =
         data = data div (16'u256).value
     
     resultHex2 = pad256Hex(resultHex2)
-    return fromString(resultHex2)
+    return resultHex2
 
-proc fromHex*[T : int128 | uint128 | int256 | uint256](data : HexString) : T =
+proc fromHex*[T : int128 | uint128 | int256 | uint256](data : string) : T =
     
     when T is int128 or T is uint128:
 
-        var data = $data
+        var data = data
         data = rmHexPrefix(data)
         data = rmHexPadding(data)
         var 
@@ -508,7 +508,7 @@ proc fromHex*[T : int128 | uint128 | int256 | uint256](data : HexString) : T =
     
     elif T is int256 or T is uint256:
     
-        var data = $data
+        var data = data
         data = rmHexPrefix(data)
         data = rmHexPadding(data)
         var 

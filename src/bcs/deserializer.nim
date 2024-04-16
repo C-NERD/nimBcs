@@ -53,7 +53,7 @@ template deSerialize*[T](data : var HexString) : untyped =
 
     elif T is int8 or T is uint8:
 
-        var output = strutils.fromHex[T](switchByteOrder(data[0..1]))
+        var output = strutils.fromHex[T]($switchByteOrder(data[0..1]))
         if len(data) > 2:
 
             data = data[2..^1]
@@ -66,7 +66,7 @@ template deSerialize*[T](data : var HexString) : untyped =
 
     elif T is int16 or T is uint16:
 
-        var output = strutils.fromHex[T](switchByteOrder(data[0..3]))
+        var output = strutils.fromHex[T]($switchByteOrder(data[0..3]))
         if len(data) > 4:
 
             data = data[4..^1]
@@ -127,7 +127,7 @@ template deSerialize*[T](data : var HexString) : untyped =
 
     elif T is int128 or T is uint128:
 
-        var output = largeints.fromHex[T](switchByteOrder(data[0..31]))
+        var output = largeints.fromHex[T]($switchByteOrder(data[0..31]))
         if len(data) > 32:
 
             data = data[32..^1]
@@ -140,7 +140,7 @@ template deSerialize*[T](data : var HexString) : untyped =
 
     elif T is int256 or T is uint256:
 
-        var output = largeints.fromHex[T](switchByteOrder(data[0..63]))
+        var output = largeints.fromHex[T]($switchByteOrder(data[0..63]))
         if len(data) > 64:
 
             data = data[64..^1]
@@ -220,27 +220,39 @@ proc deSerializeEnum*[T : enum](data : var HexString) : T =
         
         raise newException(InvalidBcsStructure, "enum type structure is invalid")
 
-proc deSerializeSeq*[T : seq](data : var HexString) : T =
+## deSerializeSeq, deSerializeArray, deSerializeTuple, deSerializeHashTable, deSerializeOption, are made to be
+## templates to allow them call custom deSerialize[T](data : var HexString) : T
+template deSerializeSeq*[T : seq](data : var HexString) : untyped =
     
+    var seqOutput : T
     let seqLen = deSerializeUleb128(data)
     for _ in 0..<seqLen:
 
-        result.add deSerialize[genericParams(typedesc[T]).get(0)](data)
+        seqOutput.add deSerialize[genericParams(typedesc[T]).get(0)](data)
 
-proc deSerializeArray*[T : array](data : var HexString) : T =
+    seqOutput
+
+template deSerializeArray*[T : array](data : var HexString) : untyped =
     
+    var arrayOutput : T
     for pos in 0..<len(T):
 
-        result[pos] = deSerialize[genericParams(typedesc[T]).get(1)](data)
+        arrayOutput[pos] = deSerialize[genericParams(typedesc[T]).get(1)](data)
 
-proc deSerializeTuple*[T : tuple](data : var HexString) : T =
+    arrayOutput
+
+template deSerializeTuple*[T : tuple](data : var HexString) : untyped =
     
-    for val in fields(result):
+    var tupleOutput : T
+    for val in fields(tupleOutput):
 
         val = deSerialize[typeof(val)](data)
 
-proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data : var HexString) : T =
+    tupleOutput
+
+template deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef](data : var HexString) : untyped =
     
+    var tableOutput : T
     let tableLen = deSerializeUleb128(data)
     when T is CountTable or T is CountTableRef:
         
@@ -249,7 +261,7 @@ proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | Order
             let key = deSerialize[genericParams(typedesc[T]).get(0)](data)
             let val = deSerialize[int](data)
 
-            result[key] = val
+            tableOutput[key] = val
 
     else:
         
@@ -258,10 +270,13 @@ proc deSerializeHashTable*[T : CountTable | CountTableRef | OrderedTable | Order
             let key = deSerialize[genericParams(typedesc[T]).get(0)](data)
             let val = deSerialize[genericParams(typedesc[T]).get(1)](data)
 
-            result[key] = val
+            tableOutput[key] = val
 
-proc deSerializeOption*[T : Option](data : var HexString) : T =
+    tableOutput
 
+template deSerializeOption*[T : Option](data : var HexString) : untyped =
+    
+    var optionOutput : T
     if $data[0..1] == "00":
         
         if len(data) > 2:
@@ -272,7 +287,7 @@ proc deSerializeOption*[T : Option](data : var HexString) : T =
 
             data = fromString("")
 
-        return none[genericParams(typedesc[T]).get(0)]()
+        optionOutput = none[genericParams(typedesc[T]).get(0)]()
 
     elif $data[0..1] == "01":
 
@@ -290,9 +305,11 @@ proc deSerializeOption*[T : Option](data : var HexString) : T =
             new(optionValue)
         
         optionValue = deSerialize[typeof(optionValue)](data)
-        result = some(optionValue)
+        optionOutput = some(optionValue)
 
     else:
 
         raise newException(InvalidBcsStructure, "option type structure is invalid")
+
+    optionOutput
 

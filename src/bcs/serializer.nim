@@ -37,11 +37,11 @@ template serialize*[T](data : T) : untyped =
 
     elif T is SomeInteger:
 
-        output = switchByteOrder(strutils.toHex[T](data))
+        output = switchByteOrder(fromString(strutils.toHex[T](data)))
 
     elif T is int128 or T is uint128 or T is int256 or T is uint256:
 
-        output = switchByteOrder(largeints.toHex[T](data))
+        output = switchByteOrder(fromString(largeints.toHex[T](data)))
 
     elif T is bool:
 
@@ -97,7 +97,7 @@ proc serializeStr*(data : string) : HexString =
 
         result.add serialize(val)
 
-    result.add toHex(data)
+    result.add fromString(toHex(data))
 
 proc serializeEnum*[T : enum](data : T) : HexString =
     
@@ -107,9 +107,12 @@ proc serializeEnum*[T : enum](data : T) : HexString =
 
     result.add serialize($data) ## serialize as string enum
 
-proc serializeArray*(data : array | seq | tuple) : HexString =
+## serializeArray, serializeHashTable and serializeOption are made to be templates to allow for them 
+## to call custom serialize[T](data : T) : HexString
+template serializeArray*(data : array | seq | tuple) : untyped =
     ## serializes array, seq or tuple
-        
+    
+    var arrayOutput : HexString
     when not(data is tuple):
 
         when data is seq:
@@ -121,36 +124,44 @@ proc serializeArray*(data : array | seq | tuple) : HexString =
 
             for val in serializeUleb128(uint32(dataLen)):
 
-                result.add serialize(val)
+                arrayOutput.add serialize(val)
         
         for item in data:
             
-            result.add serialize(item)
+            arrayOutput.add serialize(item)
 
     else:
         
         for field in fields(data):
 
-            result.add serialize(field)
+            arrayOutput.add serialize(field)
 
-proc serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : HexString =
+    arrayOutput
+
+template serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : untyped =
     
+    var tableOutput : HexString
     for val in serializeUleb128(uint32(len(data))):
 
-        result.add serialize(val)
+        tableOutput.add serialize(val)
     
     for key, value in pairs(data):
         
-        result.add serialize((key, value))
+        tableOutput.add serialize((key, value))
 
-proc serializeOption*[T](data : Option[T]) : HexString =
+    tableOutput
 
+template serializeOption*[T](data : Option[T]) : untyped =
+    
+    var optionOutput : HexString
     if data.isNone:
 
-        return fromString("00")
+        optionOutput = fromString("00")
 
     else:
         
-        result = serialize(data.get())
-        result = fromString("01" & $result)
+        optionOutput = serialize(data.get())
+        optionOutput = fromString("01" & $optionOutput)
+
+    optionOutput
 

@@ -1,4 +1,4 @@
-from std / strutils import fromHex, removePrefix
+from std / strutils import fromHex, removePrefix, HexDigits
 
 type 
     HexString* = distinct string
@@ -23,13 +23,23 @@ proc `[]`*[T, U: Ordinal](s: HexString; x: HSlice[T, U]): HexString =
 
 template isValidHex(data : HexString) : untyped =
     
+    var cond = false
     if (len(data) mod 2) != 0:
 
-        false
+        cond = false
 
     else:
 
-        true
+        cond = true
+    
+    for each in $data:
+
+        if each notin HexDigits:
+
+            cond = false
+            break
+
+    cond
 
 converter fromString*(data : string) : HexString =
     

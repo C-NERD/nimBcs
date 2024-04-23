@@ -1,5 +1,4 @@
 from std / strutils import fromHex, toHex, removePrefix, HexDigits
-from largeints import fromHex
 
 import errors
 
@@ -11,8 +10,6 @@ proc `$`*(x : HexString) : string {. borrow .}
 proc len*(x : HexString) : int {. borrow .}
 
 proc add*(x : var HexString, y : HexString) {. borrow .}
-
-func fromHex[T : SomeInteger](data : HexString) : T = fromHex[T]($data)
 
 func removePrefix(s : var HexString, y : string) {. borrow .}
 
@@ -65,7 +62,7 @@ converter toBytes*(data : HexString) : seq[byte] =
     for pos in countup(0, len(data) - 1, 2):
         
         let oneByte = data[pos..(pos + 1)]
-        result.add fromHex[byte](oneByte)
+        result.add fromHex[byte]($oneByte)
 
 func switchByteOrder*(data : HexString) : HexString =
     ## switches hex byte order from 'little' to 'big'

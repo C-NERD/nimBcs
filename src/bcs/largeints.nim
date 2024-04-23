@@ -9,7 +9,7 @@
 from std / strformat import fmt
 from std / strutils import parseInt
 
-import hex
+import errors
 
 when not defined(js):
     

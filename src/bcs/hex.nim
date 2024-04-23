@@ -1,9 +1,10 @@
-from std / strutils import fromHex, removePrefix, HexDigits
+from std / strutils import fromHex, toHex, removePrefix, HexDigits
+from largeints import fromHex
+
+import errors
 
 type 
     HexString* = distinct string
-
-    InvalidHex* = object of ValueError
 
 proc `$`*(x : HexString) : string {. borrow .}
 
@@ -14,6 +15,12 @@ proc add*(x : var HexString, y : HexString) {. borrow .}
 func fromHex[T : SomeInteger](data : HexString) : T = fromHex[T]($data)
 
 func removePrefix(s : var HexString, y : string) {. borrow .}
+
+func fromBytes*(data : openArray[byte]) : HexString =
+
+    for each in data:
+
+        result.add HexString(toHex[byte](each))
 
 proc `[]`*[T, U: Ordinal](s: HexString; x: HSlice[T, U]): HexString =
 

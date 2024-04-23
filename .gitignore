@@ -1,0 +1,4 @@
+nimble.lock
+nimble.paths
+config.nims
+tests/config.nims

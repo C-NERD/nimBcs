@@ -9,6 +9,8 @@ proc `$`*(x : HexString) : string {. borrow .}
 
 proc len*(x : HexString) : int {. borrow .}
 
+proc byteLen*(x : HexString) : int = int(len(x) / 2) ## length of byte represented
+
 proc add*(x : var HexString, y : HexString) {. borrow .}
 
 func removePrefix(s : var HexString, y : string) {. borrow .}

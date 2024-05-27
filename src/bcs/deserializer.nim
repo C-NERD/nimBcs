@@ -9,8 +9,7 @@ from std / strutils import parseHexStr, fromHex
 from std / options import Option, none, get, some
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, `[]=`
 from std / typetraits import genericParams, tupleLen, get
-from std / bitops import bitand, bitor, rotateLeftBits
-
+from std / bitops import bitand, bitor
 import constants, largeints, hex
 
 export fromHex, genericParams, get
@@ -31,7 +30,7 @@ template deSerializeUleb128*(data : var HexString) : untyped =
 
         let byteVal = strutils.fromHex[byte]($(data[0..1]))
         data = data[2..^1] ## update data
-        value = bitor(value, rotateLeftBits(bitand(byteVal, 0x7F), shift))
+        value = bitor(value, bitand(byteVal, 0x7F) shl shift)
         if bitand(byteVal, 0x80) == 0:
 
             break
@@ -155,6 +154,10 @@ template deSerialize*[T](data : var HexString) : untyped =
 
         deSerializeBool(data)
 
+    elif T is HexString:
+
+        deSerializeHexString(data)
+
     elif T is string:
 
         deSerializeStr(data)
@@ -178,6 +181,19 @@ template deSerialize*[T](data : var HexString) : untyped =
     else:
 
         {.error : $T & " is not supported".}
+
+proc deSerializeHexString*(data : var HexString) : HexString = 
+    
+    let hexLen = deSerializeUleb128(data)
+    result = data[0..hexLen - 1]
+
+    if uint32(len(data)) > hexLen:
+
+        data = data[hexLen..^1]
+
+    else:
+
+        data = fromString("")
 
 proc deSerializeBool*(data : var HexString) : bool =
 

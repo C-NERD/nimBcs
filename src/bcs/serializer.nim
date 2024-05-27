@@ -15,7 +15,7 @@ from std / strutils import toHex
 from std / options import isNone, get, Option
 from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, len, pairs
 from std / typetraits import tupleLen
-from std / bitops import bitand, bitor, rotateRightBits
+from std / bitops import bitand, bitor
 
 import constants, largeints, hex
 
@@ -47,6 +47,10 @@ template serialize*[T](data : T) : untyped =
 
         output = serializeBool(data)
 
+    elif T is HexString:
+
+        output = serializeHexString(data)
+
     elif T is string:
 
         output = serializeStr(data)
@@ -67,14 +71,33 @@ template serialize*[T](data : T) : untyped =
 
 iterator serializeUleb128*(data : uint32) : uint8 =
     
-    var data = data
-    while data >= 0x80'u32:
+    var 
+        data = data
+        hasYield = false
+    while data > 0'u32:
 
-        let byteVal = bitand(data, 0x7F)
-        yield uint8(bitor(byteVal, 0x80))
-        data = rotateRightBits(data, 7)
+        var byteVal = bitand(data, 0x7F)
+        data = data shr 7
+        if data != 0'u32:
 
-    yield uint8(bitand(data, 0x7F))
+            byteVal = bitor(byteVal, 0x80)
+
+        yield uint8(byteVal)
+        if not hasYield:
+
+            hasYield = true
+
+    if not hasYield:
+
+        yield 0'u8
+
+proc serializeHexString*(data : HexString) : HexString =
+
+    for val in serializeUleb128(uint32(byteLen(data))):
+
+        result.add serialize(val)
+
+    result.add data
 
 proc serializeBool*(data : bool) : HexString =
 

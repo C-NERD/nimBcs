@@ -13,7 +13,8 @@
 
 from std / strutils import toHex
 from std / options import isNone, get, Option
-from std / tables import CountTable, CountTableRef, OrderedTable, OrderedTableRef, Table, TableRef, len, pairs
+from std / tables import CountTable, CountTableRef, OrderedTable,
+        OrderedTableRef, Table, TableRef, len, pairs
 from std / typetraits import tupleLen
 from std / bitops import bitand, bitor
 
@@ -21,12 +22,12 @@ import constants, largeints, hex
 
 export toHex
 
-template serialize*[T](data : T) : untyped =
-    
-    var output : HexString
+template serialize*[T](data: T): untyped =
+
+    var output: HexString
     ## non native types are first so the conditions containing
     ## their native counterparts will be avoided
-    when T is CountTable or T is CountTableRef or T is OrderedTable or 
+    when T is CountTable or T is CountTableRef or T is OrderedTable or
         T is OrderedTableRef or T is Table or T is TableRef:
 
         output = serializeHashTable(data)
@@ -65,13 +66,13 @@ template serialize*[T](data : T) : untyped =
 
     else:
 
-        {.error : $T & " is not supported".}
+        {.error: $T & " is not supported".}
 
     output
 
-iterator serializeUleb128*(data : uint32) : uint8 =
-    
-    var 
+iterator serializeUleb128*(data: uint32): uint8 =
+
+    var
         data = data
         hasYield = false
     while data > 0'u32:
@@ -91,7 +92,7 @@ iterator serializeUleb128*(data : uint32) : uint8 =
 
         yield 0'u8
 
-proc serializeHexString*(data : HexString) : HexString =
+proc serializeHexString*(data: HexString): HexString =
 
     for val in serializeUleb128(uint32(byteLen(data))):
 
@@ -99,7 +100,7 @@ proc serializeHexString*(data : HexString) : HexString =
 
     result.add data
 
-proc serializeBool*(data : bool) : HexString =
+proc serializeBool*(data: bool): HexString =
 
     if data:
 
@@ -109,80 +110,83 @@ proc serializeBool*(data : bool) : HexString =
 
         return fromString("00")
 
-proc serializeStr*(data : string) : HexString =
-    
+proc serializeStr*(data: string): HexString =
+
     let dataLen = len(data)
     if dataLen > int(MAX_SEQ_LENGHT):
 
-        raise newException(InvalidSequenceLength, "string lenght is greater than " & $MAX_SEQ_LENGHT)
-    
+        raise newException(InvalidSequenceLength,
+                "string lenght is greater than " & $MAX_SEQ_LENGHT)
+
     for val in serializeUleb128(uint32(dataLen)):
 
         result.add serialize(val)
 
     result.add fromString(toHex(data))
 
-proc serializeEnum*[T : enum](data : T) : HexString =
-    
+proc serializeEnum*[T: enum](data: T): HexString =
+
     for val in serializeUleb128(uint32(ord(data))):
 
         result.add serialize(val)
 
     result.add serialize($data) ## serialize as string enum
 
-## serializeArray, serializeHashTable and serializeOption are made to be templates to allow for them 
+## serializeArray, serializeHashTable and serializeOption are made to be templates to allow for them
 ## to call custom serialize[T](data : T) : HexString
-template serializeArray*(data : array | seq | tuple) : untyped =
+template serializeArray*(data: array | seq | tuple): untyped =
     ## serializes array, seq or tuple
-    
-    var arrayOutput : HexString
+
+    var arrayOutput: HexString
     when not(data is tuple):
 
         when data is seq:
-        
+
             let dataLen = len(data)
             if dataLen > int(MAX_SEQ_LENGHT):
 
-                raise newException(InvalidSequenceLength, "seq lenght is greater than " & $MAX_SEQ_LENGHT)
+                raise newException(InvalidSequenceLength,
+                        "seq lenght is greater than " & $MAX_SEQ_LENGHT)
 
             for val in serializeUleb128(uint32(dataLen)):
 
                 arrayOutput.add serialize(val)
-        
+
         for item in data:
-            
+
             arrayOutput.add serialize(item)
 
     else:
-        
+
         for field in fields(data):
 
             arrayOutput.add serialize(field)
 
     arrayOutput
 
-template serializeHashTable*(data : CountTable | CountTableRef | OrderedTable | OrderedTableRef | Table | TableRef) : untyped =
-    
-    var tableOutput : HexString
+template serializeHashTable*(data: CountTable | CountTableRef | OrderedTable |
+        OrderedTableRef | Table | TableRef): untyped =
+
+    var tableOutput: HexString
     for val in serializeUleb128(uint32(len(data))):
 
         tableOutput.add serialize(val)
-    
+
     for key, value in pairs(data):
-        
+
         tableOutput.add serialize((key, value))
 
     tableOutput
 
-template serializeOption*[T](data : Option[T]) : untyped =
-    
-    var optionOutput : HexString
+template serializeOption*[T](data: Option[T]): untyped =
+
+    var optionOutput: HexString
     if data.isNone:
 
         optionOutput = fromString("00")
 
     else:
-        
+
         optionOutput = serialize(data.get())
         optionOutput = fromString("01" & $optionOutput)
 

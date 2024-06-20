@@ -1,5 +1,5 @@
 #nimble.lock
 nimble.paths
 config.nims
-#tests/config.nims
+tests/test1
 nimble.develop

@@ -15,6 +15,22 @@ import constants, largeints, hex
 
 export fromHex, genericParams, get
 
+## Library extensibility:
+## To extend the function of this library to cover custom deSerialization procs,
+## create a `fromBcsHook` proc with params (x : var HexString, y : var T)
+## with:
+##    T = custom datatype to be deSerialized to
+##
+## example:
+##    proc fromBcsHook(x : var HexString, y : var Address) =
+##        if x == fromString("00"):
+##            y = initAddress("0x00")
+##
+## Note :: param `x` is required to be of type var HexString as it is expected that
+## once the hex representing the data to be deserialized by the custom hook proc are processed,
+## the hex representing the data should be removed from the `x` variable leaving only
+## undeserialized data
+
 const Is64Bit*: bool = block:
 
     var is64: bool = false
@@ -180,8 +196,17 @@ template deSerialize*[T](data: var HexString): untyped =
         deSerializeTuple[T](data)
 
     else:
+        
+        var output : T
+        when not compiles(fromBcsHook(data, output)):
 
-        {.error: $T & " is not supported".}
+            {.error: $T & " is not supported".}
+
+        else:
+
+            toBcsHook(data, output)
+
+        output
 
 proc deSerializeHexString*(data: var HexString): HexString =
 

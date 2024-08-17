@@ -22,6 +22,16 @@ import constants, largeints, hex
 
 export toHex
 
+## Library extensibility:
+## To extend the function of this library to cover custom serialization procs,
+## create a `toBcsHook` proc with params (x : T, y : var HexString)
+## with:
+##    T = custom datatype to be serialized
+##
+## example:
+##    proc toBcsHook(x : Address, y : var HexString) =
+##        y = fromString($x)
+
 template serialize*[T](data: T): untyped =
 
     var output: HexString
@@ -65,8 +75,14 @@ template serialize*[T](data: T): untyped =
         output = serializeArray(data)
 
     else:
+        
+        when not compiles(toBcsHook(data, output)):
 
-        {.error: $T & " is not supported".}
+            {.error: $T & " is not supported".}
+
+        else:
+
+            toBcsHook(data, output)
 
     output
 

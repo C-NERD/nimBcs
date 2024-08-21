@@ -204,7 +204,7 @@ template deSerialize*[T](data: var HexString): untyped =
 
         else:
 
-            toBcsHook(data, output)
+            fromBcsHook(data, output)
 
         output
 

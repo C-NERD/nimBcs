@@ -3,38 +3,47 @@
 #
 #      See the file "LICENSE", included in this
 #    distribution, for details about the copyright.
+
 from std / strutils import fromHex, toHex, removePrefix, HexDigits
 
 import errors
 
+## custom hex module implementation as alternative method for handling bytes with string operations
+
 type
-    HexString* = distinct string
+    HexString* = distinct string ## distint string representation of hex strings
 
-proc `$`*(x: HexString): string {.borrow.}
+proc `$`*(x: HexString): string {.borrow.} ## borrowed from strutils
 
-proc len*(x: HexString): int {.borrow.}
+proc len*(x: HexString): int {.borrow.} ## borrowed from strutils
 
-proc byteLen*(x: HexString): int = int(len(x) / 2) ## length of byte represented
+proc byteLen*(x: HexString): int =
+    ## length of byte represented
 
-proc add*(x: var HexString, y: HexString) {.borrow.}
+    int(len(x) / 2)
 
-func removePrefix(s: var HexString, y: string) {.borrow.}
+proc add*(x: var HexString, y: HexString) {.borrow.} ## borrowed from strutils
+
+func removePrefix(s: var HexString, y: string) {.borrow.} ## borrowed from strutils
 
 func fromBytes*(data: openArray[byte]): HexString =
+    ## converts bytes to HexString
 
     for each in data:
 
         result.add HexString(toHex[byte](each))
 
 proc `[]`*[T, U: Ordinal](s: HexString; x: HSlice[T, U]): HexString =
+    ## slice operator for HexString
 
     var data = string(s)
     data = data[x]
     return HexString(data)
 
 template isValidHex(data: HexString): untyped =
+    ## checks if HexString is valid hex data
 
-    var cond = false
+    var cond: bool = false
     if (len(data) mod 2) != 0:
 
         cond = false
@@ -53,8 +62,9 @@ template isValidHex(data: HexString): untyped =
     cond
 
 converter fromString*(data: string): HexString =
+    ## converts normal nim string data to HexString
 
-    var data = HexString(data)
+    var data: HexString = HexString(data)
     removePrefix(data, "0x")
     if not isValidHex(data):
 
@@ -63,12 +73,12 @@ converter fromString*(data: string): HexString =
     return data
 
 converter toBytes*(data: HexString): seq[byte] =
-
     ## checks are done when converting string to HexString
     ## so no need for checks
+
     for pos in countup(0, len(data) - 1, 2):
 
-        let oneByte = data[pos..(pos + 1)]
+        let oneByte: HexString = data[pos..(pos + 1)]
         result.add fromHex[byte]($oneByte)
 
 func switchByteOrder*(data: HexString): HexString =

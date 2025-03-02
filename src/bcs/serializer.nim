@@ -3,12 +3,6 @@
 #
 #      See the file "LICENSE", included in this
 #    distribution, for details about the copyright.
-##
-## known limitations ::
-##
-## 1. Because of my understanding on enums in nim, all nim enums are serialized and deserialized as string valued enums.
-## So non string valued enums are not supported. Keep this in mind when interfacing with bcs libraries from
-## other languages
 {.experimental: "codeReordering".}
 
 from std / strutils import toHex
@@ -31,8 +25,14 @@ export toHex
 ## example:
 ##    proc toBcsHook(x : Address, y : var HexString) =
 ##        y = fromString($x)
+##
+## known limitations ::
+##
+## 1. All nim enums are serialized and deserialized as string valued enums. So non string valued enums are not supported.
+## Keep this in mind when interfacing with bcs libraries from other languages
 
 template serialize*[T](data: T): untyped =
+    ## serialize template, for unified way of calling serialization procs for all types
 
     var output: HexString
     ## non native types are first so the conditions containing
@@ -75,25 +75,26 @@ template serialize*[T](data: T): untyped =
         output = serializeArray(data)
 
     else:
-        
-        when not compiles(toBcsHook(data, output)):
 
-            {.error: $T & " is not supported".}
+        when compiles(toBcsHook(data, output)):
+
+            toBcsHook(data, output)
 
         else:
 
-            toBcsHook(data, output)
+            {.error: $T & " is not supported".}
 
     output
 
 iterator serializeUleb128*(data: uint32): uint8 =
+    ## iterator for serializing data length
 
     var
-        data = data
-        hasYield = false
+        data: uint32 = data
+        hasYield: bool = false
     while data > 0'u32:
 
-        var byteVal = bitand(data, 0x7F)
+        var byteVal: uint32 = bitand(data, 0x7F)
         data = data shr 7
         if data != 0'u32:
 
@@ -109,6 +110,7 @@ iterator serializeUleb128*(data: uint32): uint8 =
         yield 0'u8
 
 proc serializeHexString*(data: HexString): HexString =
+    ## serialize HexString, used to serialize bcs bytes type
 
     for val in serializeUleb128(uint32(byteLen(data))):
 
@@ -117,16 +119,16 @@ proc serializeHexString*(data: HexString): HexString =
     result.add data
 
 proc serializeBool*(data: bool): HexString =
+    ## serialize nim's bool type
 
     if data:
 
         return fromString("01")
 
-    else:
-
-        return fromString("00")
+    return fromString("00")
 
 proc serializeStr*(data: string): HexString =
+    ## serialize nim's string type
 
     let dataLen = len(data)
     if dataLen > int(MAX_SEQ_LENGHT):
@@ -141,6 +143,7 @@ proc serializeStr*(data: string): HexString =
     result.add fromString(toHex(data))
 
 proc serializeEnum*[T: enum](data: T): HexString =
+    ## serialize nim's enum type
 
     for val in serializeUleb128(uint32(ord(data))):
 
@@ -151,10 +154,16 @@ proc serializeEnum*[T: enum](data: T): HexString =
 ## serializeArray, serializeHashTable and serializeOption are made to be templates to allow for them
 ## to call custom serialize[T](data : T) : HexString
 template serializeArray*(data: array | seq | tuple): untyped =
-    ## serializes array, seq or tuple
+    ## serialize nim's array, seq or tuple types
 
     var arrayOutput: HexString
-    when not(data is tuple):
+    when data is tuple:
+
+        for field in fields(data):
+
+            arrayOutput.add serialize(field)
+
+    else:
 
         when data is seq:
 
@@ -172,29 +181,25 @@ template serializeArray*(data: array | seq | tuple): untyped =
 
             arrayOutput.add serialize(item)
 
-    else:
-
-        for field in fields(data):
-
-            arrayOutput.add serialize(field)
-
     arrayOutput
 
 template serializeHashTable*(data: CountTable | CountTableRef | OrderedTable |
         OrderedTableRef | Table | TableRef): untyped =
+    ## serialize nim's table types
 
     var tableOutput: HexString
     for val in serializeUleb128(uint32(len(data))):
 
         tableOutput.add serialize(val)
 
-    for key, value in pairs(data):
+    for key, value in data:
 
         tableOutput.add serialize((key, value))
 
     tableOutput
 
 template serializeOption*[T](data: Option[T]): untyped =
+    ## serialize nim's option type
 
     var optionOutput: HexString
     if data.isNone:

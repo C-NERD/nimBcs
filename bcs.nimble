@@ -1,10 +1,10 @@
 # Package
 
-version       = "0.3.5"
-author        = "cnerd"
-description   = "nim implementation of bcs serialization format"
-license       = "MIT"
-srcDir        = "src"
+version = "0.3.5"
+author = "cnerd"
+description = "nim implementation of bcs serialization format"
+license = "MIT"
+srcDir = "src"
 
 
 # Dependencies

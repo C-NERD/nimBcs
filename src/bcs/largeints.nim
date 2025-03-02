@@ -3,13 +3,14 @@
 #
 #      See the file "LICENSE", included in this
 #    distribution, for details about the copyright.
-##   Emergency int128, uint128, int256 and uint256 implementation for the bcs library.
-##   When these ints arrive to nim this module will be modified to accomodate
-##   them or be scraped completly.
+
 from std / strformat import fmt
 from std / strutils import parseInt
 
 import errors
+
+##   Emergency int128, uint128, int256 and uint256 implementation for the bcs library.
+##   When these ints arrive to nim this module will be modified to accomodate them or be scraped completly.
 
 when not defined(js):
 
@@ -17,20 +18,20 @@ when not defined(js):
 
     type
 
-        int128* = object
+        int128* = object ## Emergency int128 type for nim
 
             value: Integer ## caps value at 170141183460469231731687303715884105727
- ## and allows for -ve value
-        uint128* = object
+                         ## and allows for -ve value
+        uint128* = object ## Emergency uint128 type for nim
 
             value: Integer ## caps value at 340282366920938463463374607431768211455
- ## and does not allow for -ve value
+                          ## and does not allow for -ve value
 
-        int256* = object
+        int256* = object ## Emergency int256 type for nim
 
             value: Integer
 
-        uint256* = object
+        uint256* = object ## Emergency uint256 type for nim
 
             value: Integer
 
@@ -50,19 +51,19 @@ else:
 
     type
 
-        int128* = object
+        int128* = object ## Emergency int128 type for nim's js backend
 
             value: JsBigInt
 
-        uint128* = object
+        uint128* = object ## Emergency uint128 type for nim's js backend
 
             value: JsBigInt
 
-        int256* = object
+        int256* = object ## Emergency int256 type for nim's js backend
 
             value: JsBigInt
 
-        uint256* = object
+        uint256* = object ## Emergency uint256 type for nim's js backend
 
             value: JsBigInt
 
@@ -70,7 +71,7 @@ else:
 
     template parseStrInt(data: string): untyped =
 
-        var rData: string
+        var rData = ""
         for item in data:
 
             if item in {'0'..'9', 'A'..'F', 'a'..'f', '-', 'o', 'x', '.'}:
@@ -89,6 +90,7 @@ else:
 
 const HexChars = "0123456789ABCDEF"
 converter `$`*(data: int128): string =
+    ## converts int128 type to string
 
     when not defined(js):
 
@@ -99,6 +101,7 @@ converter `$`*(data: int128): string =
         $(toCstring(data.value))
 
 converter `$`*(data: uint128): string =
+    ## converts uint128 type to string
 
     when not defined(js):
 
@@ -109,6 +112,7 @@ converter `$`*(data: uint128): string =
         $(toCstring(data.value))
 
 converter `$`*(data: int256): string =
+    ## converts int256 type to string
 
     when not defined(js):
 
@@ -119,6 +123,7 @@ converter `$`*(data: int256): string =
         $(toCstring(data.value))
 
 converter `$`*(data: uint256): string =
+    ## converts uint256 type to string
 
     when not defined(js):
 
@@ -129,6 +134,7 @@ converter `$`*(data: uint256): string =
         $(toCstring(data.value))
 
 template pad128Hex(data: var string): untyped =
+    ## pads hex representations of int128 and uint128 types with 0's if not up to 32 chars in length
 
     let dataLen = len(data)
     if dataLen < 32:
@@ -144,6 +150,7 @@ template pad128Hex(data: var string): untyped =
     data
 
 template pad256Hex(data: var string): untyped =
+    ## pads hex representations of int256 and uint256 types with 0's if not up to 64 chars in length
 
     let dataLen = len(data)
     if dataLen < 64:
@@ -159,6 +166,7 @@ template pad256Hex(data: var string): untyped =
     data
 
 template rmHexPadding(data: string): untyped =
+    ## removes padding of 0's from hex representations of ints
 
     var dataTmpl = data
     let dataLen = len(data)
@@ -179,6 +187,7 @@ template rmHexPadding(data: string): untyped =
     dataTmpl
 
 template rmHexPrefix(data: var string): untyped =
+    ## removes `0x` prefix from hex representations of ints
 
     if len(data) > 2:
 
@@ -197,6 +206,7 @@ proc `==`*(x, y: int256): bool = x.value == y.value
 proc `==`*(x, y: uint256): bool = x.value == y.value
 
 proc high*[T: int128 | uint128 | int256 | uint256](_: typedesc[T]): T =
+    ## gets the highest possible value for int type
 
     when T is int128:
 
@@ -239,6 +249,7 @@ proc high*[T: int128 | uint128 | int256 | uint256](_: typedesc[T]): T =
             result.value = 115792089237316195423570985008687907853269984665640564039457584007913129639935'big
 
 proc low*[T: int128 | uint128 | int256 | uint256](_: typedesc[T]): T =
+    ## gets the lowest possible value for int type
 
     when T is int128:
 
@@ -271,6 +282,7 @@ proc low*[T: int128 | uint128 | int256 | uint256](_: typedesc[T]): T =
             result.value = -57896044618658097711785492504343953926634992332820282019728792003956564819967'big
 
 proc sizeof*[T: int128 | uint128 | int256 | uint256](_: typedesc[T]): T =
+    ## gets bytes size of int type
 
     when T is int128:
 
@@ -369,6 +381,7 @@ template `'i256`*(data: string): untyped = newInt256(data)
 template `'u256`*(data: string): untyped = newUInt256(data)
 
 proc toHex*(data: int128): string =
+    ## converts int128 to hex string representation
 
     var data = data.value
     if data == (0'i128).value:
@@ -378,7 +391,7 @@ proc toHex*(data: int128): string =
 
     if data < (0'i128).value:
 
-        let shiftValue = (1'i128).value shl (128'i128).value
+        let shiftValue: Integer = (1'i128).value shl (128'i128).value
         data = shiftValue + data
 
     var resultHex2: string
@@ -386,7 +399,7 @@ proc toHex*(data: int128): string =
 
         let
             modulo = data mod (16'i128).value
-            hex_digit = HexChars[int(modulo)]
+            hex_digit: char = HexChars[int(modulo)]
 
         resultHex2 = hex_digit & resultHex2
         data = data div (16'i128).value
@@ -395,6 +408,7 @@ proc toHex*(data: int128): string =
     return resultHex2
 
 proc toHex*(data: uint128): string =
+    ## converts uint128 to hex string representation
 
     var data = data.value
     if data == (0'u128).value:
@@ -407,7 +421,7 @@ proc toHex*(data: uint128): string =
 
         let
             modulo = data mod (16'u128).value
-            hex_digit = HexChars[int(modulo)]
+            hex_digit: char = HexChars[int(modulo)]
 
         resultHex2 = hex_digit & resultHex2
         data = data div (16'u128).value
@@ -416,6 +430,7 @@ proc toHex*(data: uint128): string =
     return resultHex2
 
 proc toHex*(data: int256): string =
+    ## converts int256 to hex string representation
 
     var data = data.value
     if data == (0'i256).value:
@@ -433,7 +448,7 @@ proc toHex*(data: int256): string =
 
         let
             modulo = data mod (16'i256).value
-            hex_digit = HexChars[int(modulo)]
+            hex_digit: char = HexChars[int(modulo)]
 
         resultHex2 = hex_digit & resultHex2
         data = data div (16'i256).value
@@ -442,6 +457,7 @@ proc toHex*(data: int256): string =
     return resultHex2
 
 proc toHex*(data: uint256): string =
+    ## converts uint256 to hex string representation
 
     var data = data.value
     if data == (0'u256).value:
@@ -454,7 +470,7 @@ proc toHex*(data: uint256): string =
 
         let
             modulo = data mod (16'u256).value
-            hex_digit = HexChars[int(modulo)]
+            hex_digit: char = HexChars[int(modulo)]
 
         resultHex2 = hex_digit & resultHex2
         data = data div (16'u256).value
@@ -463,10 +479,11 @@ proc toHex*(data: uint256): string =
     return resultHex2
 
 proc fromHex*[T: int128 | uint128 | int256 | uint256](data: string): T =
+    ## convert int's hex representation back to int type
 
+    var data = data
     when T is int128 or T is uint128:
 
-        var data = data
         data = rmHexPrefix(data)
         data = rmHexPadding(data)
         var
@@ -520,7 +537,6 @@ proc fromHex*[T: int128 | uint128 | int256 | uint256](data: string): T =
 
     elif T is int256 or T is uint256:
 
-        var data = data
         data = rmHexPrefix(data)
         data = rmHexPadding(data)
         var

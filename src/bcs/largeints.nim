@@ -415,7 +415,7 @@ proc toHex*(data: int128): string =
 
     if data < (0'i128).value:
 
-        let shiftValue: Integer = (1'i128).value shl (128'i128).value
+        let shiftValue = (1'i128).value shl (128'i128).value
         data = shiftValue + data
 
     var resultHex2 = ""

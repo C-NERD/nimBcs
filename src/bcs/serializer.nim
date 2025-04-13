@@ -89,25 +89,15 @@ template serialize*[T](data: T): untyped =
 iterator serializeUleb128*(data: uint32): uint8 =
     ## iterator for serializing data length
 
-    var
-        data: uint32 = data
-        hasYield: bool = false
-    while data > 0'u32:
+    var data: uint32 = data
+    while data > 0x80:
 
-        var byteVal: uint32 = bitand(data, 0x7F)
+        var byteVal: uint8 = uint8(bitand(data, 0x7F))
+        byteVal = bitor(byteVal, 0x80)
+        yield byteVal
         data = data shr 7
-        if data != 0'u32:
-
-            byteVal = bitor(byteVal, 0x80)
-
-        yield uint8(byteVal)
-        if not hasYield:
-
-            hasYield = true
-
-    if not hasYield:
-
-        yield 0'u8
+    
+    yield uint8(data)
 
 proc serializeHexString*(data: HexString): HexString =
     ## serialize HexString, used to serialize bcs bytes type

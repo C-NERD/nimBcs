@@ -48,19 +48,22 @@ const Is64Bit*: bool =
 template deSerializeUleb128*(data: var HexString): untyped =
     ## deserialize bcs data length
 
-    var value, shift: uint32 = 0'u32
-    while value <= high(uint32):
-
-        let byteVal: byte = strutils.fromHex[byte]($(data[0..1]))
+    var value : uint64
+    for shift in countup(0, 32, 7):
+        
+        let byteVal: byte = strutils.fromHex[byte]($data[0..1])
         data = data[2..^1] ## update data
-        value = bitor(value, bitand(byteVal, 0x7F) shl shift)
-        if bitand(byteVal, 0x80) == 0:
+        let digit = bitand(byteVal, 0x7F)
+        value = bitor(value, uint64(digit) shl shift)
+        if digit == byteVal: ## checks if at the last byte of sequence
+
+            if shift > 0 and digit == 0:
+
+                raise newException(ValueError, "Not canonical uleb128 encoding")
 
             break
 
-        shift.inc(7)
-
-    value
+    uint32(value)
 
 template deSerialize*[T](data: var HexString): untyped =
     ## deserialize template, for unified way of calling deserialization procs for all types

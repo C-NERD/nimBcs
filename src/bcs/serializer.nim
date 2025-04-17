@@ -100,7 +100,7 @@ template serializeBytes*[T](data: T): untyped =
 
     elif T is SomeInteger:
 
-        var bytes : array[sizeof(T), byte]
+        var bytes: array[sizeof(T), byte]
         bytes = cast[array[sizeof(T), byte]](data)
         output = concat(output, switchByteOrder(@bytes))
 
@@ -146,7 +146,7 @@ iterator serializeUleb128*(data: uint32): uint8 =
         byteVal = bitor(byteVal, 0x80)
         yield byteVal
         data = data shr 7
-    
+
     yield uint8(data)
 
 proc serializeHexString*(data: HexString): HexString =
@@ -176,7 +176,7 @@ proc serializeBool*(data: bool): HexString =
 
     return fromString("00")
 
-proc serializeBoolBytes*(data : bool): seq[byte] =
+proc serializeBoolBytes*(data: bool): seq[byte] =
     ## serialize nim's bool type
 
     if data:
@@ -200,7 +200,7 @@ proc serializeStr*(data: string): HexString =
 
     result.add fromString(toHex(data))
 
-proc serializeStrBytes*(data : string): seq[byte] =
+proc serializeStrBytes*(data: string): seq[byte] =
     ## serialize nim's string type
 
     let dataLen = len(data)
@@ -213,7 +213,7 @@ proc serializeStrBytes*(data : string): seq[byte] =
 
         result = concat(result, serializeBytes(val))
 
-    var strBytes : seq[byte]
+    var strBytes: seq[byte]
     for character in data:
 
         var charByte = cast[byte](character)
@@ -316,8 +316,8 @@ template serializeHashTable*(data: CountTable | CountTableRef | OrderedTable |
 
     tableOutput
 
-template serializeHashTableBytes*(data: CountTable | CountTableRef | OrderedTable |
-        OrderedTableRef | Table | TableRef): untyped =
+template serializeHashTableBytes*(data: CountTable | CountTableRef |
+        OrderedTable |OrderedTableRef | Table | TableRef): untyped =
     ## serialize nim's table types
 
     var tableOutput: seq[byte]
@@ -355,7 +355,7 @@ template serializeOptionBytes*[T](data: Option[T]): untyped =
         optionOutput.add 0'u8
 
     else:
-        
+
         optionOutput.add 1'u8
         optionOutput = concat(optionOutput, serializeBytes(data.get()))
 

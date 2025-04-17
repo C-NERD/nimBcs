@@ -1,16 +1,5 @@
 {
   "version": 2,
-  "packages": {
-    "integers": {
-      "version": "0.1.3",
-      "vcsRevision": "0e1f2839ef61a143e3f6534dac5b84c9a9941f5c",
-      "url": "https://github.com/fsh/integers",
-      "downloadMethod": "git",
-      "dependencies": [],
-      "checksums": {
-        "sha1": "00f7414c50c204022ee9e9068699f38bd41e22fe"
-      }
-    }
-  },
+  "packages": {},
   "tasks": {}
 }

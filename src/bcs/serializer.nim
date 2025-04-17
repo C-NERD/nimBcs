@@ -27,6 +27,19 @@ export toHex
 ##    proc toBcsHook(x : Address, y : var HexString) =
 ##        y = fromString($x)
 ##
+## To extend the function of this library to cover custom serializationBytes procs,
+## create a `toBcsHookBytes` proc with params (x : T, y : var seq[byte])
+## with:
+##    T = custom datatype to be serialized
+##
+## example:
+##    proc toBcsHookBytes(x : Address, y : var seq[byte]) =
+##        
+##        let addrData = ($x)[2..^1]
+##        for each in countup(len(addrData), 0, 2):
+##
+##            y.add fromHex[uint8](each)
+##
 ## known limitations ::
 ##
 ## 1. All nim enums are serialized and deserialized as string valued enums. So non string valued enums are not supported.

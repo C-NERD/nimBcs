@@ -31,6 +31,20 @@ export fromHex, genericParams, get
 ## once the hex representing the data to be deserialized by the custom hook proc are processed,
 ## the hex representing the data should be removed from the `x` variable leaving only
 ## undeserialized data
+## To extend the function of this library to cover custom deSerializationBytes procs,
+## create a `fromBcsHookBytes` proc with params (x : var seq[byte], y : var T)
+## with:
+##    T = custom datatype to be deSerialized to
+##
+## example:
+##    proc fromBcsHookBytes(x : var seq[byte], y : var Address) =
+##        if x[0] == 0'u8:
+##            y = initAddress("0x00")
+##
+## Note :: param `x` is required to be of type var seq[byte] as it is expected that
+## once the bytes representing the data to be deserialized by the custom hook proc are processed,
+## the bytes representing the data should be removed from the `x` variable leaving only
+## undeserialized data
 
 const Is64Bit*: bool =
 

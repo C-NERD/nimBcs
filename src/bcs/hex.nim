@@ -86,7 +86,13 @@ func switchByteOrder*(data: HexString): HexString =
     ## and vice versa.
 
     if not isValidHex(data): raise newException(InvalidHex, "Invalid hex data")
-    for pos in countdown(len(data) - 1, 0, 2):
+    result = data
+    when (cpuEndian == Endianness.bigEndian):
+        
+        var container : HexString
+        for pos in countdown(len(data) - 1, 0, 2):
 
-        result.add data[pos - 1..pos]
+            container.add data[pos - 1..pos]
+
+        result = container
 

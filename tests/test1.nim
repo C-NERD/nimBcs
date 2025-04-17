@@ -68,7 +68,8 @@ suite "bcs serialization and deserialization test":
     let ogData: tuple[first: int32, second: int64] = (23'i32, 23'i64)
     var
       bcs: HexString = serialize[tuple[first: int32, second: int64]](ogData)
-      data: tuple[first: int32, second: int64] = deSerialize[tuple[first: int32, second: int64]](bcs)
+      data: tuple[first: int32, second: int64] = deSerialize[tuple[first: int32,
+          second: int64]](bcs)
 
     check ogData == data
 
@@ -153,7 +154,8 @@ suite "bcs bytes serialization and deserialization test":
     let ogData: tuple[first: int32, second: int64] = (23'i32, 23'i64)
     var
       bcs: seq[byte] = serializeBytes[tuple[first: int32, second: int64]](ogData)
-      data: tuple[first: int32, second: int64] = deSerializeBytes[tuple[first: int32, second: int64]](bcs)
+      data: tuple[first: int32, second: int64] = deSerializeBytes[tuple[
+          first: int32, second: int64]](bcs)
 
     check ogData == data
 

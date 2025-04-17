@@ -48,9 +48,9 @@ const Is64Bit*: bool =
 template deSerializeUleb128*(data: var HexString): untyped =
     ## deserialize bcs data length
 
-    var value : uint64
+    var value: uint64
     for shift in countup(0, 32, 7):
-        
+
         let byteVal: byte = strutils.fromHex[byte]($data[0..1])
         data = data[2..^1] ## update data
         let digit = bitand(byteVal, 0x7F)
@@ -68,9 +68,9 @@ template deSerializeUleb128*(data: var HexString): untyped =
 template deSerializeUleb128Bytes*(data: var seq[byte]): untyped =
     ## deserialize bcs data length
 
-    var value : uint64
+    var value: uint64
     for shift in countup(0, 32, 7):
-        
+
         let byteVal: byte = data[0]
         data = data[1..^1] ## update data
         let digit = bitand(byteVal, 0x7F)
@@ -225,9 +225,9 @@ template deSerializeBytes*[T](data: var seq[byte]): untyped =
         deSerializeOptionBytes[T](data)
 
     elif T is int8 or T is uint8:
-        
-        let byteVal : byte = data[0]
-        var output : T
+
+        let byteVal: byte = data[0]
+        var output: T
         when T is int8:
 
             output = cast[T](byteVal)
@@ -240,30 +240,32 @@ template deSerializeBytes*[T](data: var seq[byte]): untyped =
         output
 
     elif T is int16 or T is uint16:
-        
-        var bytes : seq[byte] = @[data[0], data[1]]
+
+        var bytes: seq[byte] = @[data[0], data[1]]
         bytes = switchByteOrder(bytes)
-        let byteArray : array[2, byte] = [bytes[0], bytes[1]]
+        let byteArray: array[2, byte] = [bytes[0], bytes[1]]
         var output: T = cast[T](byteArray)
         data = data[2..^1]
 
         output
 
     elif T is int32 or T is uint32:
-        
-        var bytes : seq[byte] = @[data[0], data[1], data[2], data[3]]
+
+        var bytes: seq[byte] = @[data[0], data[1], data[2], data[3]]
         bytes = switchByteOrder(bytes)
-        let byteArray : array[4, byte] = [bytes[0], bytes[1], bytes[2], bytes[3]]
+        let byteArray: array[4, byte] = [bytes[0], bytes[1], bytes[2], bytes[3]]
         var output: T = cast[T](byteArray)
         data = data[4..^1]
 
         output
 
     elif T is int64 or T is uint64:
-        
-        var bytes : seq[byte] = @[data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]]
+
+        var bytes: seq[byte] = @[data[0], data[1], data[2], data[3], data[4],
+                data[5], data[6], data[7]]
         bytes = switchByteOrder(bytes)
-        let byteArray : array[8, byte] = [bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
+        let byteArray: array[8, byte] = [bytes[0], bytes[1], bytes[2], bytes[3],
+                bytes[4], bytes[5], bytes[6], bytes[7]]
         var output: T = cast[T](byteArray)
         data = data[8..^1]
 
@@ -398,7 +400,7 @@ proc deSerializeStrBytes*(data: var seq[byte]): string =
     let strLen: uint32 = deSerializeUleb128Bytes(data)
     for pos in 0..<strLen:
 
-        var x : char
+        var x: char
         x = cast[char](data[pos])
         result.add x
 
@@ -418,10 +420,10 @@ proc deSerializeEnumBytes*[T: enum](data: var seq[byte]): T =
     let enumPos: uint32 = deSerializeUleb128Bytes(data)
     result = T(enumPos)
     let enumStrBytes = deSerializeStrBytes(data)
-    var enumStr : string
+    var enumStr: string
     for pos in 0..<len(enumStrBytes):
 
-        var x : char
+        var x: char
         x = cast[char](enumStrBytes[pos])
         enumStr.add x
 
@@ -519,8 +521,9 @@ template deSerializeHashTable*[T: CountTable | CountTableRef | OrderedTable |
 
     tableOutput
 
-template deSerializeHashTableBytes*[T: CountTable | CountTableRef | OrderedTable |
-        OrderedTableRef | Table | TableRef](data: var seq[byte]): untyped =
+template deSerializeHashTableBytes*[T: CountTable | CountTableRef |
+        OrderedTable |OrderedTableRef | Table | TableRef](data: var seq[
+                byte]): untyped =
     ## deserialize into nim's table types
 
     var tableOutput: T

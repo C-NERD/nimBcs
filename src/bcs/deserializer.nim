@@ -522,7 +522,7 @@ template deSerializeHashTable*[T: CountTable | CountTableRef | OrderedTable |
     tableOutput
 
 template deSerializeHashTableBytes*[T: CountTable | CountTableRef |
-        OrderedTable |OrderedTableRef | Table | TableRef](data: var seq[
+        OrderedTable | OrderedTableRef | Table | TableRef](data: var seq[
                 byte]): untyped =
     ## deserialize into nim's table types
 

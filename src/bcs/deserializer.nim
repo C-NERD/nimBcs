@@ -62,40 +62,50 @@ const Is64Bit*: bool =
 template deSerializeUleb128*(data: var HexString): untyped =
     ## deserialize bcs data length
 
-    var value: uint64
-    for shift in countup(0, 32, 7):
+    var value, shift: uint64
+    while value <= high(uint32):
 
         let byteVal: byte = strutils.fromHex[byte]($data[0..1])
-        data = data[2..^1] ## update data
+        if len(data) > 2:
+
+            data = data[2..^1] ## update data
+
+        else:
+
+            data = fromString("")
+
         let digit = bitand(byteVal, 0x7F)
         value = bitor(value, uint64(digit) shl shift)
-        if digit == byteVal: ## checks if at the last byte of sequence
-
-            if shift > 0 and digit == 0:
-
-                raise newException(ValueError, "Not canonical uleb128 encoding")
+        if bitand(byteVal, 0x80) == 0:
 
             break
+
+        shift.inc(7)
 
     uint32(value)
 
 template deSerializeUleb128Bytes*(data: var seq[byte]): untyped =
     ## deserialize bcs data length
 
-    var value: uint64
-    for shift in countup(0, 32, 7):
+    var value, shift: uint64
+    while value <= high(uint32):
 
         let byteVal: byte = data[0]
-        data = data[1..^1] ## update data
+        if len(data) > 1:
+
+            data = data[1..^1] ## update data
+
+        else:
+
+            data = @[]
+
         let digit = bitand(byteVal, 0x7F)
         value = bitor(value, uint64(digit) shl shift)
-        if digit == byteVal: ## checks if at the last byte of sequence
-
-            if shift > 0 and digit == 0:
-
-                raise newException(ValueError, "Not canonical uleb128 encoding")
+        if bitand(byteVal, 0x80) == 0:
 
             break
+
+        shift.inc(7)
 
     uint32(value)
 
@@ -259,7 +269,13 @@ template deSerializeBytes*[T](data: var seq[byte]): untyped =
         bytes = switchByteOrder(bytes)
         let byteArray: array[2, byte] = [bytes[0], bytes[1]]
         var output: T = cast[T](byteArray)
-        data = data[2..^1]
+        if len(data) > 2:
+
+            data = data[2..^1]
+
+        else:
+
+            data = @[]
 
         output
 
@@ -269,7 +285,13 @@ template deSerializeBytes*[T](data: var seq[byte]): untyped =
         bytes = switchByteOrder(bytes)
         let byteArray: array[4, byte] = [bytes[0], bytes[1], bytes[2], bytes[3]]
         var output: T = cast[T](byteArray)
-        data = data[4..^1]
+        if len(data) > 4:
+
+            data = data[4..^1]
+
+        else:
+
+            data = @[]
 
         output
 
@@ -281,7 +303,13 @@ template deSerializeBytes*[T](data: var seq[byte]): untyped =
         let byteArray: array[8, byte] = [bytes[0], bytes[1], bytes[2], bytes[3],
                 bytes[4], bytes[5], bytes[6], bytes[7]]
         var output: T = cast[T](byteArray)
-        data = data[8..^1]
+        if len(data) > 8:
+
+            data = data[8..^1]
+
+        else:
+
+            data = @[]
 
         output
 
@@ -353,16 +381,26 @@ proc deSerializeHexString*(data: var HexString): HexString =
 
     let hexLen: uint32 = deSerializeUleb128(data)
     result = data[0..hexLen - 1]
+    if len(data) > int(hexLen):
+        
+        data = data[hexLen..^1]
 
-    data = data[hexLen..^1]
+    else:
+
+        data = fromString("")
 
 proc deSerializeHexStringBytes*(data: var seq[byte]): HexString =
     ## deserialize HexString, used to deserialize serialized bcs bytes type
 
     let hexLen: uint32 = deSerializeUleb128Bytes(data)
     result = hex.fromBytes(data[0..hexLen - 1])
+    if len(data) > int(hexLen):
 
-    data = data[hexLen..^1]
+        data = data[hexLen..^1]
+
+    else:
+
+        data = @[]
 
 proc deSerializeBool*(data: var HexString): bool =
     ## deserialize into nim's bool type
@@ -378,8 +416,14 @@ proc deSerializeBool*(data: var HexString): bool =
     else:
 
         raise newException(InvalidBcsStructure, "bool type structure is invalid")
+    
+    if len(data) > 2:
 
-    data = data[2..^1]
+        data = data[2..^1]
+
+    else:
+
+        data = fromString("")
 
 proc deSerializeBoolBytes*(data: var seq[byte]): bool =
     ## deserialize into nim's bool type
@@ -395,8 +439,14 @@ proc deSerializeBoolBytes*(data: var seq[byte]): bool =
     else:
 
         raise newException(InvalidBcsStructure, "bool type structure is invalid")
+    
+    if len(data) > 1:
 
-    data = data[1..^1]
+        data = data[1..^1]
+
+    else:
+
+        data = @[]
 
 proc deSerializeStr*(data: var HexString): string =
     ## deserialize into nim's string type
@@ -406,7 +456,13 @@ proc deSerializeStr*(data: var HexString): string =
         hexLen: uint32 = (strLen * 2)
 
     result = parseHexStr($(data[0..hexLen - 1]))
-    data = data[hexLen..^1]
+    if len(data) > int(hexLen):
+
+        data = data[hexLen..^1]
+
+    else:
+
+        data = fromString("")
 
 proc deSerializeStrBytes*(data: var seq[byte]): string =
     ## deserialize into nim's string type
@@ -417,11 +473,18 @@ proc deSerializeStrBytes*(data: var seq[byte]): string =
         var x: char
         x = cast[char](data[pos])
         result.add x
+    
+    if len(data) > int(strLen):
 
-    data = data[strLen..^1]
+        data = data[strLen..^1]
+
+    else:
+
+        data = @[]
 
 proc deSerializeEnum*[T: enum](data: var HexString): T =
     ## deserialize into nim's enum type
+
     let enumPos: uint32 = deSerializeUleb128(data)
     result = T(enumPos)
     if not (deSerializeStr(data) == $result):
@@ -433,15 +496,7 @@ proc deSerializeEnumBytes*[T: enum](data: var seq[byte]): T =
 
     let enumPos: uint32 = deSerializeUleb128Bytes(data)
     result = T(enumPos)
-    let enumStrBytes = deSerializeStrBytes(data)
-    var enumStr: string
-    for pos in 0..<len(enumStrBytes):
-
-        var x: char
-        x = cast[char](enumStrBytes[pos])
-        enumStr.add x
-
-    if not (enumStr == $result):
+    if not (deSerializeStrBytes(data) == $result):
 
         raise newException(InvalidBcsStructure, "enum type structure is invalid")
 

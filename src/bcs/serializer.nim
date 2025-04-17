@@ -153,14 +153,13 @@ iterator serializeUleb128*(data: uint32): uint8 =
     ## iterator for serializing data length
 
     var data: uint32 = data
-    while data > 0x80:
+    while data >= 0x80:
 
-        var byteVal: uint8 = uint8(bitand(data, 0x7F))
-        byteVal = bitor(byteVal, 0x80)
-        yield byteVal
+        var byteVal = bitand(data, 0x7F)
+        yield uint8(bitor(byteVal, 0x80))
         data = data shr 7
 
-    yield uint8(data)
+    yield uint8(bitand(data, 0x7F))
 
 proc serializeHexString*(data: HexString): HexString =
     ## serialize HexString, used to serialize bcs bytes type

@@ -316,8 +316,8 @@ template serializeHashTable*(data: CountTable | CountTableRef | OrderedTable |
 
     tableOutput
 
-template serializeHashTableBytes*(data: CountTable | CountTableRef |
-        OrderedTable |OrderedTableRef | Table | TableRef): untyped =
+template serializeHashTableBytes*(data: CountTable | CountTableRef | OrderedTable | 
+    OrderedTableRef | Table | TableRef): untyped =
     ## serialize nim's table types
 
     var tableOutput: seq[byte]

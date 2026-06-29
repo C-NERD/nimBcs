@@ -5,96 +5,39 @@
 #    distribution, for details about the copyright.
 {.experimental: "codeReordering".}
 
-from std / strutils import toHex
 from std / options import isNone, get, Option
 from std / tables import CountTable, CountTableRef, OrderedTable,
         OrderedTableRef, Table, TableRef, len, pairs
-from std / typetraits import tupleLen
 from std / bitops import bitand, bitor
-from std / sequtils import concat
+from std / enumutils import items
 
-import constants, hex, byteops
-
-export toHex
+import constants, byteops
 
 ## Library extensibility:
 ## To extend the function of this library to cover custom serialization procs,
-## create a `toBcsHook` proc with params (x : T, y : var HexString)
-## with:
-##    T = custom datatype to be serialized
-##
-## example:
-##    proc toBcsHook(x : Address, y : var HexString) =
-##        y = fromString($x)
-##
-## To extend the function of this library to cover custom serializationBytes procs,
 ## create a `toBcsHookBytes` proc with params (x : T, y : var seq[byte])
 ## with:
 ##    T = custom datatype to be serialized
 ##
 ## example:
 ##    proc toBcsHookBytes(x : Address, y : var seq[byte]) =
-##        
+##
 ##        let addrData = ($x)[2..^1]
-##        for each in countup(len(addrData), 0, 2):
+##        for each in countup(0, len(addrData) - 1, 2):
 ##
-##            y.add fromHex[uint8](each)
+##            y.add fromHex[uint8](addrData[each .. each + 1])
 ##
-## known limitations ::
+## notes ::
 ##
-## 1. All nim enums are serialized and deserialized as string valued enums. So non string valued enums are not supported.
-## Keep this in mind when interfacing with bcs libraries from other languages
-
-template serialize*[T](data: T): untyped =
-    ## serialize template, for unified way of calling serialization procs for all types
-
-    var output: HexString
-    ## non native types are first so the conditions containing
-    ## their native counterparts will be avoided
-    when T is CountTable or T is CountTableRef or T is OrderedTable or
-        T is OrderedTableRef or T is Table or T is TableRef:
-
-        output = serializeHashTable(data)
-
-    elif T is Option:
-
-        output = serializeOption(data)
-
-    elif T is SomeInteger:
-
-        output = switchByteOrder(fromString(strutils.toHex[T](data)))
-
-    elif T is bool:
-
-        output = serializeBool(data)
-
-    elif T is HexString:
-
-        output = serializeHexString(data)
-
-    elif T is string:
-
-        output = serializeStr(data)
-
-    elif T is enum:
-
-        output = serializeEnum(data)
-
-    elif T is array or T is seq or T is tuple:
-
-        output = serializeArray(data)
-
-    else:
-
-        when compiles(toBcsHook(data, output)):
-
-            toBcsHook(data, output)
-
-        else:
-
-            {.error: $T & " is not supported".}
-
-    output
+## 1. Enums are serialized and deserialized as BCS enum variant indexes: a
+## single ULEB128-encoded 0-based variant position, matching how other BCS
+## implementations (e.g. Rust/Aptos) encode enum variants. The index is the
+## variant's position in declaration order (first = 0, second = 1, ...), not
+## its `ord`, so enums with explicit/holed values (`enum A = 5, B = 9`) and
+## string values (`enum Red = "red"`) are all encoded correctly.
+##
+## 2. A BCS bytes / `vector<u8>` value is just a `seq[uint8]` (a.k.a `seq[byte]`):
+## it serializes to a ULEB128 length prefix followed by the raw bytes.
 
 template serializeBytes*[T](data: T): untyped =
     ## serialize template, for unified way of calling serialization procs for all types
@@ -105,37 +48,33 @@ template serializeBytes*[T](data: T): untyped =
     when T is CountTable or T is CountTableRef or T is OrderedTable or
         T is OrderedTableRef or T is Table or T is TableRef:
 
-        output = concat(output, serializeHashTableBytes(data))
+        output.add serializeHashTableBytes(data)
 
     elif T is Option:
 
-        output = concat(output, serializeOptionBytes(data))
+        output.add serializeOptionBytes(data)
 
     elif T is SomeInteger:
 
         var bytes: array[sizeof(T), byte]
         bytes = cast[array[sizeof(T), byte]](data)
-        output = concat(output, switchByteOrder(@bytes))
+        output.add switchByteOrder(@bytes)
 
     elif T is bool:
 
-        output = concat(output, serializeBoolBytes(data))
-
-    elif T is HexString:
-
-        output = concat(output, serializeHexStringBytes(data))
+        output.add serializeBoolBytes(data)
 
     elif T is string:
 
-        output = concat(output, serializeStrBytes(data))
+        output.add serializeStrBytes(data)
 
     elif T is enum:
 
-        output = concat(output, serializeEnumBytes(data))
+        output.add serializeEnumBytes(data)
 
     elif T is array or T is seq or T is tuple:
 
-        output = concat(output, serializeArrayBytes(data))
+        output.add serializeArrayBytes(data)
 
     else:
 
@@ -161,33 +100,6 @@ iterator serializeUleb128*(data: uint32): uint8 =
 
     yield uint8(bitand(data, 0x7F))
 
-proc serializeHexString*(data: HexString): HexString =
-    ## serialize HexString, used to serialize bcs bytes type
-
-    for val in serializeUleb128(uint32(byteLen(data))):
-
-        result.add serialize(val)
-
-    result.add data
-
-proc serializeHexStringBytes*(data: HexString): seq[byte] =
-    ## serialize HexString, used to serialize bcs bytes type
-
-    for val in serializeUleb128(uint32(byteLen(data))):
-
-        result = concat(result, serializeBytes(val))
-
-    result = concat(result, data.toBytes())
-
-proc serializeBool*(data: bool): HexString =
-    ## serialize nim's bool type
-
-    if data:
-
-        return fromString("01")
-
-    return fromString("00")
-
 proc serializeBoolBytes*(data: bool): seq[byte] =
     ## serialize nim's bool type
 
@@ -196,21 +108,6 @@ proc serializeBoolBytes*(data: bool): seq[byte] =
         return @[1'u8]
 
     return @[0'u8]
-
-proc serializeStr*(data: string): HexString =
-    ## serialize nim's string type
-
-    let dataLen = len(data)
-    if dataLen > int(MAX_SEQ_LENGHT):
-
-        raise newException(InvalidSequenceLength,
-                "string lenght is greater than " & $MAX_SEQ_LENGHT)
-
-    for val in serializeUleb128(uint32(dataLen)):
-
-        result.add serialize(val)
-
-    result.add fromString(toHex(data))
 
 proc serializeStrBytes*(data: string): seq[byte] =
     ## serialize nim's string type
@@ -223,7 +120,7 @@ proc serializeStrBytes*(data: string): seq[byte] =
 
     for val in serializeUleb128(uint32(dataLen)):
 
-        result = concat(result, serializeBytes(val))
+        result.add serializeBytes(val)
 
     var strBytes: seq[byte]
     for character in data:
@@ -231,58 +128,30 @@ proc serializeStrBytes*(data: string): seq[byte] =
         var charByte = cast[byte](character)
         strBytes.add(charByte)
 
-    result = concat(result, strBytes)
+    result.add strBytes
 
-proc serializeEnum*[T: enum](data: T): HexString =
-    ## serialize nim's enum type
+proc bcsVariantIndex[T: enum](data: T): uint32 =
+    ## BCS enum variant index: the 0-based position of `data` among T's
+    ## declared variants, in declaration order. This is independent of `ord`,
+    ## so enums with explicit/holed values (e.g. `enum A = 5, B = 9`) or string
+    ## values (e.g. `enum Red = "red"`) all encode to the indexes other BCS
+    ## implementations expect (0, 1, 2, ...).
 
-    for val in serializeUleb128(uint32(ord(data))):
+    for variant in items(T):
 
-        result.add serialize(val)
+        if variant == data: return
 
-    result.add serialize($data) ## serialize as string enum
+        inc result
 
 proc serializeEnumBytes*[T: enum](data: T): seq[byte] =
-    ## serialize nim's enum type
+    ## serialize nim's enum type as a BCS enum variant index (ULEB128)
 
-    for val in serializeUleb128(uint32(ord(data))):
+    for val in serializeUleb128(bcsVariantIndex(data)):
 
-        result = concat(result, serializeBytes(val))
+        result.add serializeBytes(val)
 
-    result = concat(result, serializeBytes($data)) ## serialize as string enum
-
-## serializeArray, serializeHashTable and serializeOption are made to be templates to allow for them
-## to call custom serialize[T](data : T) : HexString
-template serializeArray*(data: array | seq | tuple): untyped =
-    ## serialize nim's array, seq or tuple types
-
-    var arrayOutput: HexString
-    when data is tuple:
-
-        for field in fields(data):
-
-            arrayOutput.add serialize(field)
-
-    else:
-
-        when data is seq:
-
-            let dataLen = len(data)
-            if dataLen > int(MAX_SEQ_LENGHT):
-
-                raise newException(InvalidSequenceLength,
-                        "seq lenght is greater than " & $MAX_SEQ_LENGHT)
-
-            for val in serializeUleb128(uint32(dataLen)):
-
-                arrayOutput.add serialize(val)
-
-        for item in data:
-
-            arrayOutput.add serialize(item)
-
-    arrayOutput
-
+## serializeArrayBytes, serializeHashTableBytes and serializeOptionBytes are made to be templates
+## to allow for them to call custom serializeBytes[T](data : T) : seq[byte]
 template serializeArrayBytes*(data: array | seq | tuple): untyped =
     ## serialize nim's array, seq or tuple types
 
@@ -291,7 +160,7 @@ template serializeArrayBytes*(data: array | seq | tuple): untyped =
 
         for field in fields(data):
 
-            arrayOutput = concat(arrayOutput, serializeBytes(field))
+            arrayOutput.add serializeBytes(field)
 
     else:
 
@@ -305,58 +174,28 @@ template serializeArrayBytes*(data: array | seq | tuple): untyped =
 
             for val in serializeUleb128(uint32(dataLen)):
 
-                arrayOutput = concat(arrayOutput, serializeBytes(val))
+                arrayOutput.add serializeBytes(val)
 
         for item in data:
 
-            arrayOutput = concat(arrayOutput, serializeBytes(item))
+            arrayOutput.add serializeBytes(item)
 
     arrayOutput
 
-template serializeHashTable*(data: CountTable | CountTableRef | OrderedTable |
-        OrderedTableRef | Table | TableRef): untyped =
-    ## serialize nim's table types
-
-    var tableOutput: HexString
-    for val in serializeUleb128(uint32(len(data))):
-
-        tableOutput.add serialize(val)
-
-    for key, value in data:
-
-        tableOutput.add serialize((key, value))
-
-    tableOutput
-
-template serializeHashTableBytes*(data: CountTable | CountTableRef | OrderedTable | 
+template serializeHashTableBytes*(data: CountTable | CountTableRef | OrderedTable |
     OrderedTableRef | Table | TableRef): untyped =
     ## serialize nim's table types
 
     var tableOutput: seq[byte]
     for val in serializeUleb128(uint32(len(data))):
 
-        tableOutput = concat(tableOutput, serializeBytes(val))
+        tableOutput.add serializeBytes(val)
 
     for key, value in data:
 
-        tableOutput = concat(tableOutput, serializeBytes((key, value)))
+        tableOutput.add serializeBytes((key, value))
 
     tableOutput
-
-template serializeOption*[T](data: Option[T]): untyped =
-    ## serialize nim's option type
-
-    var optionOutput: HexString
-    if data.isNone:
-
-        optionOutput = fromString("00")
-
-    else:
-
-        optionOutput = serialize(data.get())
-        optionOutput = fromString("01" & $optionOutput)
-
-    optionOutput
 
 template serializeOptionBytes*[T](data: Option[T]): untyped =
     ## serialize nim's option type
@@ -369,7 +208,6 @@ template serializeOptionBytes*[T](data: Option[T]): untyped =
     else:
 
         optionOutput.add 1'u8
-        optionOutput = concat(optionOutput, serializeBytes(data.get()))
+        optionOutput.add serializeBytes(data.get())
 
     optionOutput
-
